@@ -45,8 +45,8 @@ When run the script will create a temporary directory called ‘wpa-temp’. It 
 - PHP IN UPLOADS - and .php files that are in the wp-content/uploads directory.  
 
 If using this script to repair a WordPress site please note the following: 
-- Do not delete all files reported as EXTRA, Some plugins during installation add files outside of their plugin directory which will be picked up. Also, wp-config.php will be listed. 
-- Be aware that a developer may of (against best practice) modified core and plugin files, review them before overwriting with the originals.  
+- Do not delete all files reported as EXTRA, Some plugins during installation add files outside of their plugin directory which will be picked up. wp-config.php will also be listed. 
+- Be aware that a developer may of (against best practice) modified core and plugin files. Review them before overwriting with the originals.  
 - In most cases the theme files are not scanned. Ensure these are reviewed manually before declaring the site free of malware. 
 - Premium themes and plugins cannot be auto downloaded. Run the tool to create the wpa-temp directory, then manually copy these required files in. Finally re-run the tool and pass the wpa-temp directory as the second argument.  
 
