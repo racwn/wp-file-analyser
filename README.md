@@ -3,7 +3,7 @@ Find modified, missing and extra files in a WordPress directory.
 
 # Usage
 ```shell
-$ ./analyser.py -v path-to-wordpress-directory
+$ ./analyser.py -v wordpress/
 
                   ___ _ _                            _
                  / __|_) |                          | |
