@@ -36,18 +36,18 @@ wordpress/wp-content/uploads/bad.php
 ```
 
 # About
-When fixing hacked Wordpress sites I needed a way of quickly comparing the core and plugin files against their wordpress.org originals. This python script automates the process of downloading the same copy of WordPress and plugins, into a new directory and then comparing the two.
-When run the script will create a temporary directory called ‘wpa-temp’. It will then download a new copy of the same version of WordPress into that directory, along with any plugins that are hosted on wordpress.org. The two directories are then compared and the following displaid:
-DIFF - files that are in both, but have been modifed in the original.
-EXTRA - files that are in the old copy, but not in the new.
-MISSING - files that are in the new copy, but not in the old. 
-PHP IN UPLOADS - and .php files that are in the wp-content/uploads directory. 
+When fixing hacked Wordpress sites I needed a way of quickly comparing the core and plugin files against their wordpress.org originals. This python script automates the process of downloading the same copy of WordPress and plugins into a new directory and then comparing the two.
+
+When run the script will create a temporary directory called ‘wpa-temp’. It will then download a new copy of the same version of WordPress into that directory, along with any plugins that are hosted on wordpress.org. The two directories are then compared and the following displayed:
+- DIFF - files that are in both, but have been modified in the original.  
+- EXTRA - files that are in the old copy, but not in the new.  
+- MISSING - files that are in the new copy, but not in the old.  
+- PHP IN UPLOADS - and .php files that are in the wp-content/uploads directory.  
 
 If using this script to repair a WordPress site please note the following: 
-
-- Do not delete all files reported as EXTRA, Some plugins during installation add files outside of their plugin directory which will be picked up. Also, wp-config.php will also be listed.  
-- Be aware that a developer may of (against best practice) modified core and plugin files, review them before overwriting with the originals.    
-- In most cases the theme files are not scanned. Ensure these are reviewed manually before declaring the site free of malware.   
+- Do not delete all files reported as EXTRA, Some plugins during installation add files outside of their plugin directory which will be picked up. Also, wp-config.php will be listed. 
+- Be aware that a developer may of (against best practice) modified core and plugin files, review them before overwriting with the originals.  
+- In most cases the theme files are not scanned. Ensure these are reviewed manually before declaring the site free of malware. 
 - Premium themes and plugins cannot be auto downloaded. Run the tool to create the wpa-temp directory, then manually copy these required files in. Finally re-run the tool and pass the wpa-temp directory as the second argument.  
 
 
