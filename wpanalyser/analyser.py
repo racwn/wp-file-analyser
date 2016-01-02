@@ -34,6 +34,9 @@ IGNORED_WP_DIRS = ['wp-content/themes', 'wp-content/uploads']
 WP_COMMON_FILES = ['wp-login.php', 'wp-blog-header.php',
                    'wp-admin/admin-ajax.php', 'wp-includes/version.php']
 
+# File extensions that may be executed by php processor 
+PHP_FILE_EXTENSIONS = ('.php', '.phtml', '.php3', '.php4', '.php5', '.phps')
+
 # Directory to hold downloaded files
 TEMP_DIR = 'wpa-temp'
 
@@ -121,12 +124,12 @@ def download_file(fileUrl, newFilePath, newFileName):
         return True
 
 
-def search_dir_for_ext(searchDir, ext):
-    """Search directory and its sub-directories for files with extension."""
+def search_dir_for_exts(searchDir, exts):
+    """Search directory and its sub-directories for files with extensions."""
     foundFiles = set()
     for root, dirs, files in os.walk(searchDir):
         for f in files:
-            if f.endswith(ext):
+            if f.endswith(exts):
                 foundFiles.add(os.path.join(root, f))
     return foundFiles
 
@@ -416,8 +419,9 @@ def main():
     msg('Starting Analysis:')
     dcres = dircmp(wpPath, otherWpPath)
     diff, extra, missing = analyze(dcres, wpPath)
+
     uploadsPath = os.path.join(wpPath, 'wp-content', 'uploads')
-    phpFiles = search_dir_for_ext(uploadsPath, '.php')
+    phpFiles = search_dir_for_exts(uploadsPath, PHP_FILE_EXTENSIONS)
 
     print_analysis(diff, extra, missing, phpFiles)
 

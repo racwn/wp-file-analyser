@@ -97,19 +97,21 @@ def test_download_file(mock_requests, mock_open_file, mock_isfile):
 
 
 @mock.patch('wpanalyser.analyser.os.walk')
-def test_search_dir_for_ext(mock_walk):
+def test_search_dir_for_exts(mock_walk):
 	mock_walk.return_value = []
-	res = wpa.search_dir_for_ext('not a dir', '.txt')
+	res = wpa.search_dir_for_exts('not a dir', ('.txt'))
 	mock_walk.assert_called_with('not a dir')
+	resCmp = set()
+	assert_equal(res, resCmp)
 	
 	mock_walk.return_value = [
-		('/foo', ('/bar',), ('test.txt', 'temp.doc',)),
-		('/foo/bar', (), ('test2.txt',)),
+		('/foo', ('/bar',), ('test.txt', 'temp.doc', 'abc.pdf', 'file.docx')),
+		('/foo/bar', (), ('test2.txt', 'abc.pdf')),
 	]
-	res = wpa.search_dir_for_ext('/foo', '.txt')
-	s = {'/foo/test.txt', '/foo/bar/test2.txt'}
-	assert_equal(len(res), 2, "Returned set is the wrong size")
-	assert_equal(s, res, "Wrong files are returned")
+	res = wpa.search_dir_for_exts('/foo', ('.txt', '.pdf'))
+	s = {'/foo/test.txt', '/foo/abc.pdf', '/foo/bar/test2.txt', '/foo/bar/abc.pdf'}
+	assert_equal(len(res), 4, "Returned set is the wrong size")
+	assert_equal(res, s, "Wrong files are returned")
 
 
 @mock.patch('wpanalyser.analyser.os.path.abspath')
