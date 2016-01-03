@@ -34,7 +34,7 @@ IGNORED_WP_DIRS = ['wp-content/themes', 'wp-content/uploads']
 WP_COMMON_FILES = ['wp-login.php', 'wp-blog-header.php',
                    'wp-admin/admin-ajax.php', 'wp-includes/version.php']
 
-# File extensions that may be executed by php processor 
+# File extensions that may be executed by php processor
 PHP_FILE_EXTENSIONS = ('.php', '.phtml', '.php3', '.php4', '.php5', '.phps')
 
 # Directory to hold downloaded files
@@ -150,41 +150,44 @@ def ignored_file(f, wpPath):
     return False
 
 
-def find_plugin_version(readmeFile):
-    """Search file for 'Stable tag: ' and copy return the version number
-    after it.
-    """
-    f = open_file(readmeFile, 'r')
+def search_file_for_string(searchFile, string):
+    """Search file for the first line that contains string and return it"""
+    f = open_file(searchFile, 'r')
     if not f:
         return False
     with f:
         for i, line in enumerate(f):
-            if "Stable tag:" in line:
-                cutStart = line.find(':') + 2
-                if cutStart <= 0:
-                    return False
-                else:
-                    return line[cutStart:-1]
+            if string in line:
+                return line
         return False
+
+
+def find_plugin_version(readmeFile):
+    """Search file for 'Stable tag: ' and copy return the version number
+    after it.
+    """
+    line = search_file_for_string(readmeFile, "Stable tag:")
+    if not line:
+        return False
+    else:
+        cutStart = line.find(':') + 2
+        return line[cutStart:-1]
 
 
 def find_wp_version(versionFile):
     """Search file for the string "$wp_version = 'x.x.x'" and return the
     version number.
     """
-    f = open_file(versionFile, 'r')
-    if not f:
+    line = search_file_for_string(versionFile, "$wp_version =")
+    if not line:
         return False
-    with f:
-        for i, line in enumerate(f):
-            if '$wp_version =' in line:
-                cutStart = line.find("'") + 1
-                cutEnd = line.find("'", cutStart + 1)
-                if((cutStart <= 0) or (cutEnd <= cutStart)):
-                    return False
-                else:
-                    return line[cutStart:cutEnd]
-        return False
+    else:
+        cutStart = line.find("'") + 1
+        cutEnd = line.find("'", cutStart + 1)
+        if((cutStart <= 0) or (cutEnd <= cutStart)):
+            return False
+        else:
+            return line[cutStart:cutEnd]
 
 
 def download_wordpress(version, toDir):

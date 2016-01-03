@@ -139,36 +139,47 @@ def test_ignored_file(mock_issubdir):
 
 
 @mock.patch('wpanalyser.analyser.open_file')
-def test_find_plugin_version(mock_open_file):
-	mockFile = mock.MagicMock(spec=file)
-	mock_open_file.return_value = mockFile
-	mockFile.__iter__ = mock.MagicMock(return_value=iter(['abc\n', 'def\n', 'ghi\n']))
-	res = wpa.find_plugin_version('readme.txt')
-	mock_open_file.assert_called_with('readme.txt', 'r')
-	assert_false(res)
-
-	mockFile.__iter__ = mock.MagicMock(return_value=iter(['abc\n', 'Stable tag: 1.2.3\n', 'ghi\n']))
-	res = wpa.find_plugin_version('readme.txt')
-	mock_open_file.assert_called_with('readme.txt', 'r')
-	assert_equal(res, '1.2.3')
-
-
-@mock.patch('wpanalyser.analyser.open_file')
-def test_find_wp_version(mock_open_file):
-	mockFile = mock.MagicMock(spec=file)
-	mock_open_file.return_value = mockFile
-	mockFile.__iter__ = mock.Mock(return_value=iter(['abc', 'def', 'ghi']))
-	res = wpa.find_wp_version('file.txt')
-	mock_open_file.assert_called_with('file.txt', 'r')
-	assert_false(res)
-
-	mockFile.__iter__ = mock.Mock(return_value=iter(['abc', "$wp_version == '1.2.3'", 'ghi']))
-	res = wpa.find_wp_version('file.txt')
-	assert_equal(res, '1.2.3')
-
+def test_search_file_for_str(mock_open_file):
 	mock_open_file.return_value = False
-	res = wpa.find_wp_version('notafile.txt')
+	line = wpa.search_file_for_string('notafile.txt', 'ab')
+	assert_false(line)
+
+	mockFile = mock.MagicMock(spec=file)
+	mock_open_file.return_value = mockFile
+	mockFile.__iter__ = mock.MagicMock(return_value=iter(['abc\n', 'def\n', 'ghi\n']))	
+	line = wpa.search_file_for_string('file.txt', 'ab')
+	mock_open_file.assert_called_with('file.txt', 'r')
+	assert_equal(line, 'abc\n')
+
+	line = wpa.search_file_for_string('file.txt', 'xyz')
+	mock_open_file.assert_called_with('file.txt', 'r')
+	assert_false(line)
+
+
+@mock.patch('wpanalyser.analyser.search_file_for_string')
+def test_find_plugin_version(mock_search_string):
+	mock_search_string.return_value = False
+	res = wpa.find_plugin_version('file.txt')
+	mock_search_string.assert_called_with('file.txt', 'Stable tag:')
 	assert_false(res)
+
+	mock_search_string.return_value = "Stable tag: 1.2.3\n"
+	res = wpa.find_plugin_version('file.txt')
+	mock_search_string.assert_called_with('file.txt', 'Stable tag:')
+	assert_equal(res, '1.2.3')
+
+
+@mock.patch('wpanalyser.analyser.search_file_for_string')
+def test_find_wp_version(mock_search_string):
+	mock_search_string.return_value = False
+	res = wpa.find_wp_version('file.php')
+	mock_search_string.assert_called_with('file.php', '$wp_version =')
+	assert_false(res)
+
+	mock_search_string.return_value = "$wp_version = '1.2.3'\n"
+	res = wpa.find_wp_version('file.php')
+	mock_search_string.assert_called_with('file.php', '$wp_version =')
+	assert_equal(res, '1.2.3')
 
 
 @mock.patch('wpanalyser.analyser.download_file')
