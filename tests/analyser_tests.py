@@ -157,29 +157,46 @@ def test_search_file_for_str(mock_open_file):
 
 
 @mock.patch('wpanalyser.analyser.search_file_for_string')
-def test_find_plugin_version(mock_search_string):
-	mock_search_string.return_value = False
+def test_find_plugin_version(mock_search_file):
+	mock_search_file.return_value = False
 	res = wpa.find_plugin_version('file.txt')
-	mock_search_string.assert_called_with('file.txt', 'Stable tag:')
+	mock_search_file.assert_called_with('file.txt', 'Stable tag:')
 	assert_false(res)
 
-	mock_search_string.return_value = "Stable tag: 1.2.3\n"
+	mock_search_file.return_value = "Stable tag: 1.2.3\n"
 	res = wpa.find_plugin_version('file.txt')
-	mock_search_string.assert_called_with('file.txt', 'Stable tag:')
+	mock_search_file.assert_called_with('file.txt', 'Stable tag:')
 	assert_equal(res, '1.2.3')
 
 
 @mock.patch('wpanalyser.analyser.search_file_for_string')
-def test_find_wp_version(mock_search_string):
-	mock_search_string.return_value = False
+def test_find_wp_version(mock_search_file):
+	mock_search_file.return_value = False
 	res = wpa.find_wp_version('file.php')
-	mock_search_string.assert_called_with('file.php', '$wp_version =')
+	mock_search_file.assert_called_with('file.php', '$wp_version =')
 	assert_false(res)
 
-	mock_search_string.return_value = "$wp_version = '1.2.3'\n"
+	mock_search_file.return_value = "$wp_version = \n"
 	res = wpa.find_wp_version('file.php')
-	mock_search_string.assert_called_with('file.php', '$wp_version =')
+	mock_search_file.assert_called_with('file.php', '$wp_version =')
+	assert_false(res)
+
+	mock_search_file.return_value = "$wp_version = '1.2.3'\n"
+	res = wpa.find_wp_version('file.php')
+	mock_search_file.assert_called_with('file.php', '$wp_version =')
 	assert_equal(res, '1.2.3')
+
+
+@mock.patch('wpanalyser.analyser.search_file_for_string')
+def test_find_theme_details(mock_search_file):
+	mock_search_file.side_effect = ['Text Domain: themename\n', 'Version: 1.2.3\n']
+	name, version = wpa.find_theme_details('stylesheet.css')
+	calls = [
+		mock.call('stylesheet.css', 'Text Domain:'), 
+		mock.call('stylesheet.css', 'Version:')]
+	mock_search_file.assert_has_calls(calls)
+	assert_equal(name, 'themename')
+	assert_equal(version, '1.2.3')
 
 
 @mock.patch('wpanalyser.analyser.download_file')
@@ -196,6 +213,14 @@ def test_download_wordpress(mock_download_file):
 @mock.patch('wpanalyser.analyser.unzip')
 @mock.patch('wpanalyser.analyser.os.remove')
 def test_get_plugin(mock_remove, mock_unzip, mock_download_file):
+	mock_download_file.return_value = False
+	res = wpa.get_plugin('plugin', '1.2.3', 'wp')
+	mock_download_file.assert_called_with(
+					'https://downloads.wordpress.org/plugin/plugin.1.2.3.zip',
+					wpa.TEMP_DIR,
+					'plugin.1.2.3.zip')
+	assert_false(res)
+
 	mock_download_file.return_value = True
 	mock_unzip.return_value = 'wp/wp-content/plugins/plugin'
 	res = wpa.get_plugin('plugin', '1.2.3', 'wp')

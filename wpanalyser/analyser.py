@@ -190,6 +190,19 @@ def find_wp_version(versionFile):
             return line[cutStart:cutEnd]
 
 
+def find_theme_details(stylesheet):
+    """Extract the theme name and version from theme stylesheet"""
+    name = False
+    version = False
+    nameLine = search_file_for_string(stylesheet, "Text Domain:")
+    if nameLine:
+        name = nameLine[nameLine.find(':') + 2:-1]
+    versionLine = search_file_for_string(stylesheet, "Version:")
+    if versionLine:
+        version = versionLine[versionLine.find(':') + 2:-1]
+    return name, version
+
+
 def download_wordpress(version, toDir):
     """Download the identified WordPress archive version into toDir."""
     newFileName = "wordpress_%s.zip" % (version)
