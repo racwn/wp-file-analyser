@@ -57,8 +57,8 @@ Download analyser.py to your required directory (directory above your WordPress 
 chmod +x analyser.py
 ```
 
-# Requirments
-requests - http://docs.python-requests.org/en/latest/
+# Requirements
+- [requests](http://docs.python-requests.org/en/latest/)
 
 # Command line options
 Show help
@@ -89,4 +89,4 @@ nosetests
 ```
 
 # License
-Licensed under GPLv3 
+Licensed under [GPLv3](https://github.com/VirenMohindra/wp-file-analyser/blob/master/LICENSE)
