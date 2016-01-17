@@ -157,16 +157,12 @@ def test_search_file_for_str(mock_open_file):
 
 
 @mock.patch('wpanalyser.analyser.search_file_for_string')
-def test_find_plugin_version(mock_search_file):
-	mock_search_file.return_value = False
-	res = wpa.find_plugin_version('file.txt')
-	mock_search_file.assert_called_with('file.txt', 'Stable tag:')
-	assert_false(res)
-
+def test_find_plugin_details(mock_search_file):
 	mock_search_file.return_value = "Stable tag: 1.2.3\n"
-	res = wpa.find_plugin_version('file.txt')
-	mock_search_file.assert_called_with('file.txt', 'Stable tag:')
-	assert_equal(res, '1.2.3')
+	name, version = wpa.find_plugin_details('wp/wp-content/plugins/plugin1/readme.txt')
+	mock_search_file.assert_called_with('wp/wp-content/plugins/plugin1/readme.txt', "Stable tag:")
+	assert_equal(name, 'plugin1')
+	assert_equal(version, '1.2.3')
 
 
 @mock.patch('wpanalyser.analyser.search_file_for_string')
@@ -208,29 +204,48 @@ def test_download_wordpress(mock_download_file):
 	assert_true(res)
 	assert_equal(fileName, 'tmp/wordpress_1.4.3.zip')
 
-
 @mock.patch('wpanalyser.analyser.download_file')
 @mock.patch('wpanalyser.analyser.unzip')
 @mock.patch('wpanalyser.analyser.os.remove')
-def test_get_plugin(mock_remove, mock_unzip, mock_download_file):
+def test_get_zipped_asset(mock_remove, mock_unzip, mock_download_file):
 	mock_download_file.return_value = False
-	res = wpa.get_plugin('plugin', '1.2.3', 'wp')
+	res = wpa.get_zipped_asset('https://downloads.wordpress.org/thing/thing.1.2.3.zip', 'thing.1.2.3.zip', 'wp')
 	mock_download_file.assert_called_with(
-					'https://downloads.wordpress.org/plugin/plugin.1.2.3.zip',
+					'https://downloads.wordpress.org/thing/thing.1.2.3.zip',
 					wpa.TEMP_DIR,
-					'plugin.1.2.3.zip')
+					'thing.1.2.3.zip')
 	assert_false(res)
 
 	mock_download_file.return_value = True
-	mock_unzip.return_value = 'wp/wp-content/plugins/plugin'
-	res = wpa.get_plugin('plugin', '1.2.3', 'wp')
+	mock_unzip.return_value = 'wp'
+	res = wpa.get_zipped_asset('https://downloads.wordpress.org/thing/thing.1.2.3.zip', 'thing.1.2.3.zip', 'wp')
 	mock_download_file.assert_called_with(
-					'https://downloads.wordpress.org/plugin/plugin.1.2.3.zip',
+					'https://downloads.wordpress.org/thing/thing.1.2.3.zip',
 					wpa.TEMP_DIR,
-					'plugin.1.2.3.zip')
-	mock_unzip.assert_called_with(os.path.join(wpa.TEMP_DIR, 'plugin.1.2.3.zip'), 'wp/wp-content/plugins')
-	mock_remove.assert_called_with(os.path.join(wpa.TEMP_DIR, 'plugin.1.2.3.zip'))
-	assert_equal(res, 'wp/wp-content/plugins/plugin')
+					'thing.1.2.3.zip')
+	mock_unzip.assert_called_with(os.path.join(wpa.TEMP_DIR, 'thing.1.2.3.zip'), 'wp')
+	mock_remove.assert_called_with(os.path.join(wpa.TEMP_DIR, 'thing.1.2.3.zip'))
+	assert_equal(res, 'wp')	
+
+
+@mock.patch('wpanalyser.analyser.get_zipped_asset')
+@mock.patch('wpanalyser.analyser.os.path.join')
+def test_get_plugin(mock_join, mock_get_zipped_asset):
+	mock_get_zipped_asset.return_value = 'wp/wp-content/plugins/plugin1'
+	mock_join.return_value = 'wp/wp-content/plugins'
+	res = wpa.get_plugin('plugin1', '1.2.3', 'wp')
+	mock_join.assert_called_with('wp', 'wp-content', 'plugins')
+	assert_equal(res, 'wp/wp-content/plugins/plugin1')
+
+
+@mock.patch('wpanalyser.analyser.get_zipped_asset')
+@mock.patch('wpanalyser.analyser.os.path.join')
+def test_get_theme(mock_join, mock_get_zipped_asset):
+	mock_get_zipped_asset.return_value = 'wp/wp-content/themes/theme1'
+	mock_join.return_value = 'wp/wp-content/themes'
+	res = wpa.get_theme('plugin1', '1.2.3', 'wp')
+	mock_join.assert_called_with('wp', 'wp-content', 'themes')
+	assert_equal(res, 'wp/wp-content/themes/theme1')
 
 
 @mock.patch('wpanalyser.analyser.os.path.isfile')
@@ -244,25 +259,60 @@ def test_is_wordpress(mock_isfile):
 	assert_true(res)
 
 
-@mock.patch('wpanalyser.analyser.find_plugin_version')
 @mock.patch('wpanalyser.analyser.os.walk')
-def test_find_plugins(mock_walk, mock_find_plugin_version):
+@mock.patch('wpanalyser.analyser.os.path.isfile')
+def test_get_file_from_from_each_subdirectory(mock_isfile, mock_walk):
 	mock_walk.return_value = iter([
-			('plugins', ('plugin1', 'plugin2'), ('plugin1.php', 'plugin2.php')),
-			('plugins/plugin1', (), ('plugin1.php')),
-			('plugins/plugin2', (), ('plugin2.php'))
+			('plugins', ('plugin1', 'plugin2', 'plugin3'), ('readme.txt', 'readme.txt', 'file.txt')),
+			('plugins/plugin1', (), ('readme.txt')),
+			('plugins/plugin2', (), ('readme.txt')),
+			('plugins/plugin3', (), ('file.txt'))
 		])
-	mock_find_plugin_version.side_effect = ['1.2.3','1.2.4']
-	res = wpa.find_plugins('wp')
-	mock_walk.assert_called_with('wp/wp-content/plugins')
+	mock_isfile.side_effect = [True, True, False]
+	found = wpa.get_file_from_each_subdirectory('plugins', 'readme.txt')
+	calls = [
+		mock.call('plugins/plugin1/readme.txt'),
+		mock.call('plugins/plugin2/readme.txt'),
+		mock.call('plugins/plugin3/readme.txt')
+	]
+	mock_isfile.assert_has_calls(calls)
+	assert_equal(found, [
+		'plugins/plugin1/readme.txt',
+		'plugins/plugin2/readme.txt'
+	])
+
+@mock.patch('wpanalyser.analyser.find_plugin_details')
+@mock.patch('wpanalyser.analyser.get_file_from_each_subdirectory')
+def test_find_plugins(mock_get_file_from_each, mock_find_plugin_details):
+	mock_get_file_from_each.return_value = ['wp/wp-content/plugins/plugin1/readme.txt', 'wp/wp-content/plugins/plugin2/readme.txt']
+	mock_find_plugin_details.side_effect = [['plugin1', '1.2.3'], ['plugin2', '1.0']]
+	found = wpa.find_plugins('wp/')
+	mock_get_file_from_each.assert_called_with('wp/wp-content/plugins', 'readme.txt')
 	calls = [
 		mock.call('wp/wp-content/plugins/plugin1/readme.txt'),
-		mock.call('wp/wp-content/plugins/plugin2/readme.txt'),
+		mock.call('wp/wp-content/plugins/plugin2/readme.txt')
 	]
-	mock_find_plugin_version.assert_has_calls(calls)
-	assert_equal(res, [
-		{'name': 'plugin1', 'version': '1.2.3'}, 
-		{'name': 'plugin2', 'version': '1.2.4'}
+	mock_find_plugin_details.assert_has_calls(calls)
+	assert_equal(found, [
+		{'name': 'plugin1', 'version': '1.2.3'},
+		{'name': 'plugin2', 'version': '1.0'}
+	])
+
+@mock.patch('wpanalyser.analyser.find_theme_details')
+@mock.patch('wpanalyser.analyser.get_file_from_each_subdirectory')
+def test_find_themes(mock_get_file_from_each, mock_find_theme_details):
+	mock_get_file_from_each.return_value = ['wp/wp-content/themes/theme1/stylesheet.css', 'wp/wp-content/themes/theme2/stylesheet.css']
+	mock_find_theme_details.side_effect = [['theme1', '1.2.3'], ['theme2', '1.0']]
+	found = wpa.find_themes('wp/')
+	mock_get_file_from_each.assert_called_with('wp/wp-content/themes', 'style.css')
+	calls = [
+		mock.call('wp/wp-content/themes/theme1/style.css'),
+		mock.call('wp/wp-content/themes/theme2/style.css')
+	]
+	mock_find_theme_details.assert_has_calls(calls)
+	assert_equal(found, [
+		{'name': 'theme1', 'version': '1.2.3'},
+		{'name': 'theme2', 'version': '1.0'}
 	])
 
 
@@ -290,6 +340,7 @@ def test_analyze(mock_isdir, mock_ignored_file):
 	assert_equal(diff, diffCmp)
 	assert_equal(extra, extraCmp)
 	assert_equal(missing, missingCmp)
+
 
 @mock.patch('wpanalyser.analyser.sys.stdout', new_callable=StringIO)
 def test_print_analysis(mock_stdout):
