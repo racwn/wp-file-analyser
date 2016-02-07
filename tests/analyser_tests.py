@@ -306,8 +306,8 @@ def test_find_themes(mock_get_file_from_each, mock_find_theme_details):
 	found = wpa.find_themes('wp/')
 	mock_get_file_from_each.assert_called_with('wp/wp-content/themes', 'style.css')
 	calls = [
-		mock.call('wp/wp-content/themes/theme1/style.css'),
-		mock.call('wp/wp-content/themes/theme2/style.css')
+		mock.call('wp/wp-content/themes/theme1/stylesheet.css'),
+		mock.call('wp/wp-content/themes/theme2/stylesheet.css')
 	]
 	mock_find_theme_details.assert_has_calls(calls)
 	assert_equal(found, [

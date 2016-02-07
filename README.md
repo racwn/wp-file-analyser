@@ -4,7 +4,6 @@ Find modified, missing and extra files in a WordPress directory.
 # Usage
 ```shell
 $ ./analyser.py -v wordpress/
-
                   ___ _ _                            _
                  / __|_) |                          | |
   _ _ _ ____    | |__ _| | ____     ____ ____   ____| |_   _  ___  ____  ____
@@ -15,24 +14,26 @@ $ ./analyser.py -v wordpress/
     
 Setting up:
 Downloading a new copy of WordPress
-wordpress_4.4.zip [==================================================]
+wordpress_4.4.2.zip [==================================================]
 Getting plugins:
-akismet.3.1.5.zip [==================================================]
+akismet.3.1.7.zip [==================================================]
 wp-super-cache.1.4.7.zip [==================================================]
+Getting themes:
+twentyfourteen.1.6.zip [==================================================]
+twentyfifteen.1.4.zip [==================================================]
+twentysixteen.1.1.zip [==================================================]
+billie.1.0.3.zip [==================================================]
 Comparing wordpress/ with wpa-temp/wordpress/
 Starting Analysis:
-DIFF: (3)
-wordpress/wp-content/themes/index.php
-wordpress/wp-blog-header.php
-wordpress/wp-content/plugins/wp-super-cache/ossdl-cdn.php
+DIFF: (1)
+wordpress/wp-content/themes/billie/content.php
 EXTRA: (2)
-wordpress/wp-config.php
-wordpress/wp-admin/bad.php
-MISSING: (2)
-wpa-temp/wordpress/wp-content/plugins/akismet/class.akismet.php
-wpa-temp/wordpress/wp-admin/css/about.css
+wordpress/wp-content/plugins/wp-super-cache/malware.php
+wordpress/bad.php
+MISSING: (1)
+wpa-temp/wordpress/wp-load.php
 PHP FILES IN 'WP-CONTENT/UPLOADS': (1)
-wordpress/wp-content/uploads/bad.php
+wordpress/wp-content/uploads/shouldnotbehere.php
 ```
 
 # About
