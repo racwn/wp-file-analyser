@@ -27,6 +27,10 @@ WP_PACKAGE_ARCHIVE_LINK = "https://wordpress.org/wordpress-"
 # photo-gallery.1.4.3.zip
 WP_PLUGIN_ARCHIVE_LINK = "https://downloads.wordpress.org/plugin/"
 
+# Url for standard wordpress themes, add theme + version num
+# e.g. appointment.2.4.5.zip
+WP_THEME_ARCHIVE_LINK = "https://downloads.wordpress.org/theme/"
+
 # Ignore everything below these directories
 IGNORED_WP_DIRS = ['wp-content/themes', 'wp-content/uploads']
 
@@ -34,7 +38,7 @@ IGNORED_WP_DIRS = ['wp-content/themes', 'wp-content/uploads']
 WP_COMMON_FILES = ['wp-login.php', 'wp-blog-header.php',
                    'wp-admin/admin-ajax.php', 'wp-includes/version.php']
 
-# File extensions that may be executed by php processor 
+# File extensions that may be executed by php processor
 PHP_FILE_EXTENSIONS = ('.php', '.phtml', '.php3', '.php4', '.php5', '.phps')
 
 # Directory to hold downloaded files
@@ -150,41 +154,62 @@ def ignored_file(f, wpPath):
     return False
 
 
-def find_plugin_version(readmeFile):
-    """Search file for 'Stable tag: ' and copy return the version number
-    after it.
-    """
-    f = open_file(readmeFile, 'r')
+def search_file_for_string(searchFile, string):
+    """Search file for the first line that contains string and return it"""
+    f = open_file(searchFile, 'r')
     if not f:
         return False
     with f:
         for i, line in enumerate(f):
-            if "Stable tag:" in line:
-                cutStart = line.find(':') + 2
-                if cutStart <= 0:
-                    return False
-                else:
-                    return line[cutStart:-1]
+            if string in line:
+                return line
         return False
+
+
+def find_plugin_details(readmePath):
+    """Search file for 'Stable tag: ' and copy return the version number
+    after it. Extract the plugin name from the file path.
+    """
+    name = False
+    version = False 
+    versionLine = search_file_for_string(readmePath, "Stable tag:")
+    if versionLine:
+        cutStart = versionLine.find(':') + 2
+        version = versionLine[cutStart:-1]
+    nameCutStart =  readmePath.find('plugins')
+    nameCutStart = nameCutStart + 8
+    nameCutEnd = readmePath.find(os.path.sep, nameCutStart)
+    name = readmePath[nameCutStart:nameCutEnd]
+    return name, version
 
 
 def find_wp_version(versionFile):
-    """Search file for the string "$wp_version = 'x.x.x'" and return the
-    version number.
+    """Search file for the string "$wp_version =" and return the version number 
+    after it.
     """
-    f = open_file(versionFile, 'r')
-    if not f:
+    line = search_file_for_string(versionFile, "$wp_version =")
+    if not line:
         return False
-    with f:
-        for i, line in enumerate(f):
-            if '$wp_version =' in line:
-                cutStart = line.find("'") + 1
-                cutEnd = line.find("'", cutStart + 1)
-                if((cutStart <= 0) or (cutEnd <= cutStart)):
-                    return False
-                else:
-                    return line[cutStart:cutEnd]
-        return False
+    else:
+        cutStart = line.find("'") + 1
+        cutEnd = line.find("'", cutStart + 1)
+        if((cutStart <= 0) or (cutEnd <= cutStart)):
+            return False
+        else:
+            return line[cutStart:cutEnd]
+
+
+def find_theme_details(stylesheet):
+    """Extract the theme name and version from theme stylesheet"""
+    name = False
+    version = False
+    nameLine = search_file_for_string(stylesheet, "Text Domain:")
+    if nameLine:
+        name = nameLine[nameLine.find(':') + 2:-1]
+    versionLine = search_file_for_string(stylesheet, "Version:")
+    if versionLine:
+        version = versionLine[versionLine.find(':') + 2:-1]
+    return name, version
 
 
 def download_wordpress(version, toDir):
@@ -195,20 +220,32 @@ def download_wordpress(version, toDir):
     newFilePath = os.path.join(toDir, newFileName)
     return res, newFilePath
 
-
-def get_plugin(name, version, wpDir):
-    """Get a new copy of plugin version, extract it into the plugin directory
-    of the given WordPress path.
-    """
-    zipName = "%s.%s.zip" % (name, version)
-    fileUrl = "%s%s" % (WP_PLUGIN_ARCHIVE_LINK, zipName)
-    res = download_file(fileUrl, TEMP_DIR, zipName)
+def get_zipped_asset(zipUrl, zipName, toPath):
+    """Download zip file as zipName from URL and extract it toPath"""
+    res = download_file(zipUrl, TEMP_DIR, zipName)
     if not res:
         return False
     zipFilePath = os.path.join(TEMP_DIR, zipName)
-    toPath = os.path.join(wpDir, 'wp-content', 'plugins')
     extractPath = unzip(zipFilePath, toPath)
     os.remove(zipFilePath)
+    return extractPath
+
+
+def get_plugin(name, version, wpDir):
+    """Get a new copy of given plugin version, extract it to the plugins directory of wpDir"""
+    zipName = "%s.%s.zip" % (name, version)
+    zipUrl = "%s%s" % (WP_PLUGIN_ARCHIVE_LINK, zipName)
+    toPath = os.path.join(wpDir, 'wp-content', 'plugins')
+    extractPath = get_zipped_asset(zipUrl, zipName, toPath)
+    return extractPath
+
+
+def get_theme(name, version, wpDir):
+    """Get a new copy of given theme version, extract it to the themes directory of wpDir"""
+    zipName = "%s.%s.zip" % (name, version)
+    zipUrl = "%s%s" % (WP_THEME_ARCHIVE_LINK, zipName)
+    toPath = os.path.join(wpDir, 'wp-content', 'themes')
+    extractPath = get_zipped_asset(zipUrl, zipName, toPath)
     return extractPath
 
 
@@ -221,17 +258,36 @@ def is_wordpress(dirPath):
     return noMissingFiles
 
 
+def get_file_from_each_subdirectory(path, fileName):
+    """For each subdirectory of path, return a path of fileName if found"""
+    found = []
+    subdirs = next(os.walk(path))[1]  # get only the first level subdirs
+    for d in subdirs:
+        f = os.path.join(path, d, fileName)
+        if os.path.isfile(f):
+            found.append(f)
+    return found
+
+
 def find_plugins(wpPath):
-    """Return a list of plugins and their current versions from a WordPress
-    directory.
-    """
+    """Return a list of plugins and their current versions"""
     found = []
     pluginsDir = os.path.join(wpPath, 'wp-content', 'plugins')
-    plugins = next(os.walk(pluginsDir))[1]  # get only the first level subdirs
-    for plugin in plugins:
-        readmeFile = os.path.join(pluginsDir, plugin, 'readme.txt')
-        version = find_plugin_version(readmeFile)
-        found.append({'name': plugin, 'version': version})
+    readmeFiles = get_file_from_each_subdirectory(pluginsDir, 'readme.txt')
+    for readme in readmeFiles:
+        name, version = find_plugin_details(readme)
+        found.append({'name': name, 'version': version})
+    return found
+
+
+def find_themes(wpPath):
+    """Return a list of themes and their versions"""
+    found = []
+    themesDir = os.path.join(wpPath, 'wp-content', 'themes')
+    themeStylesheets = get_file_from_each_subdirectory(themesDir, 'style.css')
+    for stylesheet in themeStylesheets:
+        name, version = find_theme_details(stylesheet)
+        found.append({'name': name, 'version': version})
     return found
 
 
@@ -403,7 +459,8 @@ def main():
         msg('ERROR: could not get WordPress directories for comparison', True)
         sys.exit()
 
-    # Get plugins, but only where a new WordPress directory has been created.
+    # Get plugins and themes, but only when a new WordPress directory has 
+    # been created.
     if not args.other_wordpress_path:
         msg('Getting plugins:')
         plugins = find_plugins(wpPath)
@@ -411,6 +468,15 @@ def main():
             name = plugin['name']
             version = plugin['version']
             res = get_plugin(name, version, otherWpPath)
+            if not res:
+                msg("ERROR: Could not download %s %s" % (name, version), True)
+
+        msg('Getting themes:')
+        themes = find_themes(wpPath)
+        for theme in themes:
+            name = theme['name']
+            version = theme['version']
+            res = get_theme(name, version, otherWpPath)
             if not res:
                 msg("ERROR: Could not download %s %s" % (name, version), True)
 
