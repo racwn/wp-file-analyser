@@ -103,12 +103,12 @@ def download_file(fileUrl: str, newFilePath: str, newFileName: str) -> bool:
             msg("ERROR: cannot create new file %s" % newFile, True)
             return False
         with f:
-            contentLength = response.headers.get('content-length')
-            if (contentLength is None) or (verbose is False):
+            contentLengthHeader = response.headers.get('content-length')
+            if (contentLengthHeader is None) or (verbose is False):
                 f.write(response.content)
             else:
                 dl = 0
-                contentLength = int(contentLength)
+                contentLength = int(contentLengthHeader)
                 sys.stdout.write("\r%s [%s]" % (newFileName, ' ' * 50))
                 for data in response.iter_content(chunk_size=1024):
                     if data:
@@ -199,9 +199,9 @@ def find_wp_version(versionFile: str) -> str|Literal[False]:
 def find_theme_details(stylesheet: str) -> Tuple[str|Literal[False], str|Literal[False]]:
     """Extract the theme name and version from theme stylesheet"""
     nameLine = search_file_for_string(stylesheet, "Text Domain:")
-    name = nameLine[nameLine.find(':') + 2:-1] if nameLine else False
+    name: str|Literal[False] = nameLine[nameLine.find(':') + 2:-1] if nameLine else False
     versionLine = search_file_for_string(stylesheet, "Version:")
-    version = versionLine[versionLine.find(':') + 2:-1] if versionLine else False
+    version: str|Literal[False] = versionLine[versionLine.find(':') + 2:-1] if versionLine else False
     return name, version
 
 
@@ -298,7 +298,8 @@ def analyze(dcres: dircmp[str], wpPath: str) -> Tuple[set[str], set[str], set[st
     missing = set()
 
     # 1. Get modified files
-    [diff.add(os.path.join(dcres.left, f)) for f in dcres.diff_files]
+    for f in dcres.diff_files:
+        diff.add(os.path.join(dcres.left, f))
 
     # 2. Get extra files
     for name in dcres.left_only:
@@ -308,7 +309,8 @@ def analyze(dcres: dircmp[str], wpPath: str) -> Tuple[set[str], set[str], set[st
                 extra.add(path)
 
     # 3. Get missing files
-    [missing.add(os.path.join(dcres.right, f)) for f in dcres.right_only]
+    for f in dcres.right_only:
+        missing.add(os.path.join(dcres.right, f))
 
     # Recurse into each sub dir
     for sub_dcres in dcres.subdirs.values():
@@ -382,11 +384,12 @@ def process_wp_dirs(args: argparse.Namespace) -> Tuple[str|Literal[False], str|L
         return False, False
 
     # If given a second directory check it contains a copy of WordPress
-    if args.other_wordpress_path:
-        otherWpPath = args.other_wordpress_path
-        if not is_wordpress(otherWpPath):
+    other_wordpress_path: Optional[str] = args.other_wordpress_path
+    if other_wordpress_path is not None:
+        if is_wordpress(other_wordpress_path):
+            otherWpPath = other_wordpress_path
+        else:
             print("ERROR: Could not find Wordpress in %s" % otherWpPath)
-            otherWpPath = False
 
     # Or download a new copy.
     else:

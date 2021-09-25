@@ -1,8 +1,9 @@
 import os
+import zipfile
 from io import StringIO, FileIO
 from unittest import mock
 
-from nose.tools import assert_true, assert_false, assert_equal
+from nose.tools import assert_true, assert_false, assert_equal  # type: ignore
 from requests.exceptions import HTTPError
 
 import wpanalyser.analyser as wpa
@@ -48,7 +49,7 @@ def test_unzip(mock_open_file, mock_zip):
 	res = wpa.unzip('zipFile.zip', '/')
 	assert_false(res)
 
-	mock_zip.side_effect = wpa.zipfile.BadZipfile
+	mock_zip.side_effect = zipfile.BadZipfile
 	res = wpa.unzip('zipFile.zip', '/')
 	assert_false(res)
 
@@ -101,7 +102,7 @@ def test_search_dir_for_exts(mock_walk):
 	mock_walk.return_value = []
 	res = wpa.search_dir_for_exts('not a dir', ('.txt',))
 	mock_walk.assert_called_with('not a dir')
-	resCmp = set()
+	resCmp: set[str] = set()
 	assert_equal(res, resCmp)
 	
 	mock_walk.return_value = [
@@ -344,10 +345,10 @@ def test_analyze(mock_isdir, mock_ignored_file):
 
 @mock.patch('wpanalyser.analyser.sys.stdout', new_callable=StringIO)
 def test_print_analysis(mock_stdout):
-	diff = ['diff1.txt', 'diff2.txt']
-	extra = ['extra1.txt', 'extra2.txt']
-	missing = ['missing1.txt', 'missing2.txt']
-	extraPhp = ['extra1.php', 'extra2.php']
+	diff = {'diff1.txt', 'diff2.txt'}
+	extra = {'extra1.txt', 'extra2.txt'}
+	missing = {'missing1.txt', 'missing2.txt'}
+	extraPhp = {'extra1.php', 'extra2.php'}
 	wpa.print_analysis(diff,extra,missing,extraPhp)
 	text = mock_stdout.getvalue()
 	assert text == """DIFF: (2)
@@ -424,9 +425,9 @@ def test_process_wp_dirs(mock_unzip, mock_download_wp, mock_find_wp,
 
 	mock_makedirs.side_effect = None
 
-	os.makedirs.side_effect = None
 	mock_find_wp.return_value = False
 	wpPath, otherWpPath = wpa.process_wp_dirs(args)
+	assert wpPath is not False
 	mock_find_wp.assert_called_with(os.path.join(wpPath, wpa.WP_VERSION_FILE_PATH))
 	assert_equal(wpPath, 'wp')
 	assert_false(otherWpPath)
