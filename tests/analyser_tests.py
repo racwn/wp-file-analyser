@@ -286,7 +286,7 @@ def test_get_file_from_from_each_subdirectory(mock_isfile, mock_walk):
 def test_find_plugins(mock_get_file_from_each, mock_find_plugin_details):
 	mock_get_file_from_each.return_value = ['wp/wp-content/plugins/plugin1/readme.txt', 'wp/wp-content/plugins/plugin2/readme.txt']
 	mock_find_plugin_details.side_effect = [['plugin1', '1.2.3'], ['plugin2', '1.0']]
-	found = wpa.find_plugins('wp/')
+	found = list(wpa.find_plugins('wp/'))
 	mock_get_file_from_each.assert_called_with('wp/wp-content/plugins', 'readme.txt')
 	calls = [
 		mock.call('wp/wp-content/plugins/plugin1/readme.txt'),
@@ -294,8 +294,8 @@ def test_find_plugins(mock_get_file_from_each, mock_find_plugin_details):
 	]
 	mock_find_plugin_details.assert_has_calls(calls)
 	assert_equal(found, [
-		{'name': 'plugin1', 'version': '1.2.3'},
-		{'name': 'plugin2', 'version': '1.0'}
+		('plugin1', '1.2.3'),
+		('plugin2', '1.0'),
 	])
 
 @mock.patch('wpanalyser.analyser.find_theme_details')
@@ -303,7 +303,7 @@ def test_find_plugins(mock_get_file_from_each, mock_find_plugin_details):
 def test_find_themes(mock_get_file_from_each, mock_find_theme_details):
 	mock_get_file_from_each.return_value = ['wp/wp-content/themes/theme1/stylesheet.css', 'wp/wp-content/themes/theme2/stylesheet.css']
 	mock_find_theme_details.side_effect = [['theme1', '1.2.3'], ['theme2', '1.0']]
-	found = wpa.find_themes('wp/')
+	found = list(wpa.find_themes('wp/'))
 	mock_get_file_from_each.assert_called_with('wp/wp-content/themes', 'style.css')
 	calls = [
 		mock.call('wp/wp-content/themes/theme1/stylesheet.css'),
@@ -311,8 +311,8 @@ def test_find_themes(mock_get_file_from_each, mock_find_theme_details):
 	]
 	mock_find_theme_details.assert_has_calls(calls)
 	assert_equal(found, [
-		{'name': 'theme1', 'version': '1.2.3'},
-		{'name': 'theme2', 'version': '1.0'}
+		('theme1', '1.2.3'),
+		('theme2', '1.0'),
 	])
 
 

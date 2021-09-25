@@ -8,7 +8,7 @@ import shutil
 import sys
 import zipfile
 from filecmp import dircmp
-from typing import Any, Dict, Literal, Tuple, Iterable, IO, TextIO, BinaryIO, overload
+from typing import Any, Literal, Tuple, Iterable, IO, TextIO, BinaryIO, overload
 
 import requests
 from requests.exceptions import HTTPError
@@ -267,26 +267,22 @@ def get_file_from_each_subdirectory(path: str, fileName: str) -> Iterable[str]:
     return found
 
 
-def find_plugins(wpPath: str) -> Iterable[Dict[str, str|Literal[False]]]:
+def find_plugins(wpPath: str) -> Iterable[Tuple[str, str|Literal[False]]]:
     """Return a list of plugins and their current versions"""
-    found = []
     pluginsDir = os.path.join(wpPath, 'wp-content', 'plugins')
     readmeFiles = get_file_from_each_subdirectory(pluginsDir, 'readme.txt')
     for readme in readmeFiles:
         name, version = find_plugin_details(readme)
-        found.append({'name': name, 'version': version})
-    return found
+        yield name, version
 
 
-def find_themes(wpPath: str) -> Iterable[Dict[str, str|Literal[False]]]:
+def find_themes(wpPath: str) -> Iterable[Tuple[str|Literal[False], str|Literal[False]]]:
     """Return a list of themes and their versions"""
-    found = []
     themesDir = os.path.join(wpPath, 'wp-content', 'themes')
     themeStylesheets = get_file_from_each_subdirectory(themesDir, 'style.css')
     for stylesheet in themeStylesheets:
         name, version = find_theme_details(stylesheet)
-        found.append({'name': name, 'version': version})
-    return found
+        yield name, version
 
 
 def analyze(dcres: dircmp[str], wpPath: str) -> Tuple[set[str], set[str], set[str]]:
@@ -461,19 +457,13 @@ def main() -> None:
     # been created.
     if not args.other_wordpress_path:
         msg('Getting plugins:')
-        plugins = find_plugins(wpPath)
-        for plugin in plugins:
-            name = plugin['name']
-            version = plugin['version']
+        for name, version in find_plugins(wpPath):
             res = get_plugin(name, version, otherWpPath)
             if not res:
                 msg("ERROR: Could not download %s %s" % (name, version), True)
 
         msg('Getting themes:')
-        themes = find_themes(wpPath)
-        for theme in themes:
-            name = theme['name']
-            version = theme['version']
+        for name, version in find_themes(wpPath):
             res = get_theme(name, version, otherWpPath)
             if not res:
                 msg("ERROR: Could not download %s %s" % (name, version), True)
