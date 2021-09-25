@@ -1,21 +1,16 @@
 #!/usr/bin/env python
 
+from __future__ import annotations
+
 import argparse
-import urllib
-import zipfile
 import os
-import sys
-import requests
 import shutil
-from requests.exceptions import HTTPError
+import sys
+import zipfile
 from filecmp import dircmp
 
-global WP_VERSION_FILE_PATH
-global WP_PACKAGE_ARCHIVE_LINK
-global IGNORED_WP_DIRS
-global WP_FILES
-global TEMP_DIR
-global verbose
+import requests
+from requests.exceptions import HTTPError
 
 # File that contains the WordPress version number
 WP_VERSION_FILE_PATH = "wp-includes/version.php"
@@ -48,7 +43,7 @@ TEMP_DIR = 'wpa-temp'
 verbose = False
 
 
-def msg(msg, error=False):
+def msg(message, error=False):
     """Print a message according to verbosity and error conditions."""
     if error or verbose:
         print(message)
@@ -76,7 +71,7 @@ def unzip(zippedFile, outPath):
             for name in namelist:
                 z.extract(name, outPath)
         except RuntimeError as re:
-            msg("Error processing zip (RuntimeError): %s" % (re), True)
+            msg("Error processing zip (RuntimeError): %s" % re, True)
             return False
         except IOError as ioe:
             msg("Error opening [%s]: %s" % (zippedFile, ioe.strerror), True)
@@ -93,18 +88,16 @@ def download_file(fileUrl, newFilePath, newFileName):
     if os.path.isfile(newFile):
         msg("ERROR: cannot download %s, file already exists" % newFile, True)
         return False
+    response = requests.get(fileUrl, stream=True)
     try:
-        response = requests.get(fileUrl, stream=True)
         response.raise_for_status()
     except HTTPError:
-        msg("ERROR: download problem[%s]: %s " % (
-                                                response.status_code,
-                                                fileUrl), True)
+        msg("ERROR: download problem[%s]: %s " % (response.status_code, fileUrl), True)
         return False
     else:
         f = open_file(newFile, "wb")
         if not f:
-            msg("ERROR: cannot create new file %s" % (newFile), True)
+            msg("ERROR: cannot create new file %s" % newFile, True)
             return False
         with f:
             contentLength = response.headers.get('content-length')
@@ -193,7 +186,7 @@ def find_wp_version(versionFile):
     else:
         cutStart = line.find("'") + 1
         cutEnd = line.find("'", cutStart + 1)
-        if((cutStart <= 0) or (cutEnd <= cutStart)):
+        if (cutStart <= 0) or (cutEnd <= cutStart):
             return False
         else:
             return line[cutStart:cutEnd]
@@ -214,7 +207,7 @@ def find_theme_details(stylesheet):
 
 def download_wordpress(version, toDir):
     """Download the identified WordPress archive version into toDir."""
-    newFileName = "wordpress_%s.zip" % (version)
+    newFileName = "wordpress_%s.zip" % version
     fileUrl = "%s%s.zip" % (WP_PACKAGE_ARCHIVE_LINK, version)
     res = download_file(fileUrl, toDir, newFileName)
     newFilePath = os.path.join(toDir, newFileName)
@@ -348,7 +341,7 @@ def print_analysis(diff, extra, missing, extraPHP):
     for f in missing:
         print(f)
 
-    print("PHP FILES IN 'WP-CONTENT/UPLOADS': (%s)" % (len(extraPHP)))
+    print("PHP FILES IN 'WP-CONTENT/UPLOADS': (%s)" % len(extraPHP))
     for f in extraPHP:
         print(f)
 
@@ -418,7 +411,7 @@ def process_wp_dirs(args):
             verF = os.path.join(wpPath, WP_VERSION_FILE_PATH)
             version = find_wp_version(verF)
             if not version:
-                msg("ERROR: Could not detect version in %s" % (verF), True)
+                msg("ERROR: Could not detect version in %s" % verF, True)
                 return wpPath, False
 
         res, zipFilePath = download_wordpress(version, TEMP_DIR)
