@@ -269,7 +269,7 @@ def test_get_file_from_from_each_subdirectory(mock_isfile, mock_walk):
 			('plugins/plugin3', (), ('file.txt'))
 		])
 	mock_isfile.side_effect = [True, True, False]
-	found = wpa.get_file_from_each_subdirectory('plugins', 'readme.txt')
+	found = list(wpa.get_file_from_each_subdirectory('plugins', 'readme.txt'))
 	calls = [
 		mock.call('plugins/plugin1/readme.txt'),
 		mock.call('plugins/plugin2/readme.txt'),

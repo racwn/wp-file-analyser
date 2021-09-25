@@ -57,8 +57,7 @@ def open_file(fileName: str, mode: Literal['rb', 'wb']) -> BinaryIO|Literal[Fals
 def open_file(fileName: str, mode: str) -> IO[Any]|Literal[False]:
     """Open file with mode. Return False on failure."""
     try:
-        f = open(fileName, mode)
-        return f
+        return open(fileName, mode)
     except IOError as e:
         msg("Error opening [%s]: %s" % (fileName, e.strerror), True)
         return False
@@ -66,15 +65,15 @@ def open_file(fileName: str, mode: str) -> IO[Any]|Literal[False]:
 
 def unzip(zippedFile: str, outPath: str) -> str | Literal[False]:
     """Extract all files from a zip archive to a destination directory."""
-    newDir = False  # the toplevel directory name in the zipfile
     fh = open_file(zippedFile, 'rb')
     with fh:
         try:
             z = zipfile.ZipFile(fh)
             namelist = z.namelist()
-            newDir = namelist[0]
+            newDir = namelist[0]  # the toplevel directory name in the zipfile
             for name in namelist:
                 z.extract(name, outPath)
+            return newDir
         except RuntimeError as re:
             msg("Error processing zip (RuntimeError): %s" % re, True)
             return False
@@ -84,7 +83,6 @@ def unzip(zippedFile: str, outPath: str) -> str | Literal[False]:
         except zipfile.BadZipfile as bzf:
             msg("Bad zip file: %s" % zippedFile, True)
             return False
-    return newDir
 
 
 def download_file(fileUrl: str, newFilePath: str, newFileName: str) -> bool:
@@ -168,12 +166,13 @@ def find_plugin_details(readmePath: str) -> Tuple[str, str|Literal[False]]:
     """Search file for 'Stable tag: ' and copy return the version number
     after it. Extract the plugin name from the file path.
     """
-    name = False
-    version = False 
+    version: str|Literal[False]
     versionLine = search_file_for_string(readmePath, "Stable tag:")
     if versionLine:
         cutStart = versionLine.find(':') + 2
         version = versionLine[cutStart:-1]
+    else:
+        version = False
     nameCutStart =  readmePath.find('plugins')
     nameCutStart = nameCutStart + 8
     nameCutEnd = readmePath.find(os.path.sep, nameCutStart)
@@ -199,14 +198,10 @@ def find_wp_version(versionFile: str) -> str|Literal[False]:
 
 def find_theme_details(stylesheet: str) -> Tuple[str|Literal[False], str|Literal[False]]:
     """Extract the theme name and version from theme stylesheet"""
-    name = False
-    version = False
     nameLine = search_file_for_string(stylesheet, "Text Domain:")
-    if nameLine:
-        name = nameLine[nameLine.find(':') + 2:-1]
+    name = nameLine[nameLine.find(':') + 2:-1] if nameLine else False
     versionLine = search_file_for_string(stylesheet, "Version:")
-    if versionLine:
-        version = versionLine[versionLine.find(':') + 2:-1]
+    version = versionLine[versionLine.find(':') + 2:-1] if versionLine else False
     return name, version
 
 
@@ -249,22 +244,19 @@ def get_theme(name: str, version: str, wpDir: str) -> str | Literal[False]:
 
 def is_wordpress(dirPath: str) -> bool:
     """Return True if dirPath contains all the files in WP_COMMON_FILES."""
-    noMissingFiles = True
     for wpFile in WP_COMMON_FILES:
         if not os.path.isfile(os.path.join(dirPath, wpFile)):
-            noMissingFiles = False
-    return noMissingFiles
+            return False
+    return True
 
 
 def get_file_from_each_subdirectory(path: str, fileName: str) -> Iterable[str]:
     """For each subdirectory of path, return a path of fileName if found"""
-    found = []
     subdirs = next(os.walk(path))[1]  # get only the first level subdirs
     for d in subdirs:
         f = os.path.join(path, d, fileName)
         if os.path.isfile(f):
-            found.append(f)
-    return found
+            yield f
 
 
 def find_plugins(wpPath: str) -> Iterable[Tuple[str, str|Literal[False]]]:
@@ -381,8 +373,8 @@ def create_args() -> argparse.ArgumentParser:
 def process_wp_dirs(args: argparse.Namespace) -> Tuple[str|Literal[False], str|Literal[False]]:
     """Return paths to each WP directory, creating a new one where required."""
 
-    wpPath = args.wordpress_path
-    otherWpPath = False
+    wpPath: str = args.wordpress_path
+    otherWpPath: str|Literal[False] = False
 
     isWordpress = is_wordpress(wpPath)
     if not isWordpress:
