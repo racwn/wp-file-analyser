@@ -99,7 +99,7 @@ def test_download_file(mock_requests, mock_open_file, mock_isfile):
 @mock.patch('wpanalyser.analyser.os.walk')
 def test_search_dir_for_exts(mock_walk):
 	mock_walk.return_value = []
-	res = wpa.search_dir_for_exts('not a dir', ('.txt'))
+	res = wpa.search_dir_for_exts('not a dir', ('.txt',))
 	mock_walk.assert_called_with('not a dir')
 	resCmp = set()
 	assert_equal(res, resCmp)
