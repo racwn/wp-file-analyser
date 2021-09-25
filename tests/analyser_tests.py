@@ -265,9 +265,9 @@ def test_is_wordpress(mock_isfile):
 def test_get_file_from_from_each_subdirectory(mock_isfile, mock_walk):
 	mock_walk.return_value = iter([
 			('plugins', ('plugin1', 'plugin2', 'plugin3'), ('readme.txt', 'readme.txt', 'file.txt')),
-			('plugins/plugin1', (), ('readme.txt')),
-			('plugins/plugin2', (), ('readme.txt')),
-			('plugins/plugin3', (), ('file.txt'))
+			('plugins/plugin1', (), ('readme.txt',)),
+			('plugins/plugin2', (), ('readme.txt',)),
+			('plugins/plugin3', (), ('file.txt',))
 		])
 	mock_isfile.side_effect = [True, True, False]
 	found = list(wpa.get_file_from_each_subdirectory('plugins', 'readme.txt'))

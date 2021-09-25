@@ -66,6 +66,8 @@ def open_file(fileName: str, mode: str) -> IO[Any]|Literal[False]:
 def unzip(zippedFile: str, outPath: str) -> str | Literal[False]:
     """Extract all files from a zip archive to a destination directory."""
     fh = open_file(zippedFile, 'rb')
+    if not fh:
+        return False
     with fh:
         try:
             z = zipfile.ZipFile(fh)
@@ -259,21 +261,30 @@ def get_file_from_each_subdirectory(path: str, fileName: str) -> Iterable[str]:
             yield f
 
 
-def find_plugins(wpPath: str) -> Iterable[Tuple[str, str|Literal[False]]]:
+def find_plugins(wpPath: str) -> Iterable[Tuple[str, str]]:
     """Return a list of plugins and their current versions"""
     pluginsDir = os.path.join(wpPath, 'wp-content', 'plugins')
     readmeFiles = get_file_from_each_subdirectory(pluginsDir, 'readme.txt')
     for readme in readmeFiles:
         name, version = find_plugin_details(readme)
+        if not version:
+            msg("ERROR: Could not find plugin version in %s" % readme)
+            continue
         yield name, version
 
 
-def find_themes(wpPath: str) -> Iterable[Tuple[str|Literal[False], str|Literal[False]]]:
+def find_themes(wpPath: str) -> Iterable[Tuple[str, str]]:
     """Return a list of themes and their versions"""
     themesDir = os.path.join(wpPath, 'wp-content', 'themes')
     themeStylesheets = get_file_from_each_subdirectory(themesDir, 'style.css')
     for stylesheet in themeStylesheets:
         name, version = find_theme_details(stylesheet)
+        if not name:
+            msg("ERROR: Could not find theme name in %s" % stylesheet)
+            continue
+        if not version:
+            msg("ERROR: Could not find theme version in %s" % stylesheet)
+            continue
         yield name, version
 
 
