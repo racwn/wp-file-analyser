@@ -1,11 +1,11 @@
-from nose.tools import *
-import wpanalyser.analyser as wpa
-import mock
-import unittest
 import os
-from requests.exceptions import HTTPError
-from StringIO import StringIO
+from io import StringIO, FileIO
+from unittest import mock
 
+from nose.tools import assert_true, assert_false, assert_equal
+from requests.exceptions import HTTPError
+
+import wpanalyser.analyser as wpa
 
 """
 Tests should be run from top level project folder using 'nosetests'
@@ -57,7 +57,7 @@ def test_unzip(mock_open_file, mock_zip):
 @mock.patch('wpanalyser.analyser.open_file')
 @mock.patch('wpanalyser.analyser.requests')
 def test_download_file(mock_requests, mock_open_file, mock_isfile):
-	mockFile = mock.MagicMock(spec=file)
+	mockFile = mock.MagicMock(spec=FileIO)
 	mock_open_file.return_value = mockFile
 	mock_isfile.return_value = False
 	response = mock.MagicMock()
@@ -144,7 +144,7 @@ def test_search_file_for_str(mock_open_file):
 	line = wpa.search_file_for_string('notafile.txt', 'ab')
 	assert_false(line)
 
-	mockFile = mock.MagicMock(spec=file)
+	mockFile = mock.MagicMock(spec=FileIO)
 	mock_open_file.return_value = mockFile
 	mockFile.__iter__ = mock.MagicMock(return_value=iter(['abc\n', 'def\n', 'ghi\n']))	
 	line = wpa.search_file_for_string('file.txt', 'ab')

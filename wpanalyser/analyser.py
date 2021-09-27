@@ -51,7 +51,7 @@ verbose = False
 def msg(msg, error=False):
     """Print a message according to verbosity and error conditions."""
     if error or verbose:
-        print msg
+        print(message)
 
 
 def open_file(fileName, mode):
@@ -124,7 +124,7 @@ def download_file(fileUrl, newFilePath, newFileName):
                                                          newFileName,
                                                          '=' * done,
                                                          ' ' * (50-done)))
-                print ''  # newline after progress bar
+                print()  # newline after progress bar
         return True
 
 
@@ -336,21 +336,21 @@ def analyze(dcres, wpPath):
 
 def print_analysis(diff, extra, missing, extraPHP):
     """Show file lists in an easy to copy format"""
-    print "DIFF: (%s)" % len(diff)
+    print("DIFF: (%s)" % len(diff))
     for f in diff:
-        print f
+        print(f)
 
-    print "EXTRA: (%s)" % len(extra)
+    print("EXTRA: (%s)" % len(extra))
     for f in extra:
-        print f
+        print(f)
 
-    print "MISSING: (%s)" % len(missing)
+    print("MISSING: (%s)" % len(missing))
     for f in missing:
-        print f
+        print(f)
 
-    print "PHP FILES IN 'WP-CONTENT/UPLOADS': (%s)" % (len(extraPHP))
+    print("PHP FILES IN 'WP-CONTENT/UPLOADS': (%s)" % (len(extraPHP)))
     for f in extraPHP:
-        print f
+        print(f)
 
 
 def create_args():
@@ -392,14 +392,14 @@ def process_wp_dirs(args):
 
     isWordpress = is_wordpress(wpPath)
     if not isWordpress:
-        print "ERROR: Could not find WordPress in %s" % (wpPath)
+        print("ERROR: Could not find WordPress in %s" % wpPath)
         return False, False
 
     # If given a second directory check it contains a copy of WordPress
     if args.other_wordpress_path:
         otherWpPath = args.other_wordpress_path
         if not is_wordpress(otherWpPath):
-            print "ERROR: Could not find Wordpress in %s" % (otherWpPath)
+            print("ERROR: Could not find Wordpress in %s" % otherWpPath)
             otherWpPath = False
 
     # Or download a new copy.
