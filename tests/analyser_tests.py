@@ -15,12 +15,12 @@ def test_file_open():
 	m = mock.mock_open()
 	with mock.patch('wpanalyser.analyser.open', m, create=True):
 		wpa.open_file('foo', 'r')
-		m.assert_called_with('foo', 'r')
+		m.assert_called_with('foo', 'r', encoding=None)
 
 	m.side_effect = IOError
 	with mock.patch('wpanalyser.analyser.open', m, create=True):
 		res = wpa.open_file('foo', 'r')
-		m.assert_called_with('foo', 'r')
+		m.assert_called_with('foo', 'r', encoding=None)
 		assert_false(res)
 
 
@@ -149,11 +149,11 @@ def test_search_file_for_str(mock_open_file):
 	mock_open_file.return_value = mockFile
 	mockFile.__iter__ = mock.MagicMock(return_value=iter(['abc\n', 'def\n', 'ghi\n']))	
 	line = wpa.search_file_for_string('file.txt', 'ab')
-	mock_open_file.assert_called_with('file.txt', 'r')
+	mock_open_file.assert_called_with('file.txt', 'r', encoding='UTF-8')
 	assert_equal(line, 'abc\n')
 
 	line = wpa.search_file_for_string('file.txt', 'xyz')
-	mock_open_file.assert_called_with('file.txt', 'r')
+	mock_open_file.assert_called_with('file.txt', 'r', encoding='UTF-8')
 	assert_false(line)
 
 

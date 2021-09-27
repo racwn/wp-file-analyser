@@ -8,7 +8,7 @@ import shutil
 import sys
 import zipfile
 from filecmp import dircmp
-from typing import Any, Literal, Tuple, Iterable, IO, TextIO, BinaryIO, overload
+from typing import Any, Literal, Optional, Tuple, Iterable, IO, TextIO, BinaryIO, overload
 
 import requests
 from requests.exceptions import HTTPError
@@ -51,13 +51,13 @@ def msg(message: str, error: bool = False) -> None:
 
 
 @overload
-def open_file(fileName: str, mode: Literal['r', 'w']) -> TextIO|Literal[False]: ...
+def open_file(fileName: str, mode: Literal['r', 'w'], encoding: Optional[str] = None) -> TextIO|Literal[False]: ...
 @overload
-def open_file(fileName: str, mode: Literal['rb', 'wb']) -> BinaryIO|Literal[False]: ...
-def open_file(fileName: str, mode: str) -> IO[Any]|Literal[False]:
+def open_file(fileName: str, mode: Literal['rb', 'wb'], encoding: None = None) -> BinaryIO|Literal[False]: ...
+def open_file(fileName: str, mode: str, encoding: Optional[str] = None) -> IO[Any]|Literal[False]:
     """Open file with mode. Return False on failure."""
     try:
-        return open(fileName, mode)
+        return open(fileName, mode, encoding=encoding)
     except IOError as e:
         msg("Error opening [%s]: %s" % (fileName, e.strerror), True)
         return False
@@ -154,7 +154,7 @@ def ignored_file(f: str, wpPath: str) -> bool:
 
 def search_file_for_string(searchFile: str, string: str) -> str|Literal[False]:
     """Search file for the first line that contains string and return it"""
-    f = open_file(searchFile, 'r')
+    f = open_file(searchFile, 'r', encoding='UTF-8')
     if not f:
         return False
     with f:
