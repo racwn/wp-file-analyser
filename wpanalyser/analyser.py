@@ -253,11 +253,15 @@ def is_wordpress(dirPath: str) -> bool:
 
 def get_file_from_each_subdirectory(path: str, fileName: str) -> Iterable[str]:
     """For each subdirectory of path, return a path of fileName if found"""
-    subdirs = next(os.walk(path))[1]  # get only the first level subdirs
-    for d in subdirs:
-        f = os.path.join(path, d, fileName)
-        if os.path.isfile(f):
-            yield f
+    try:
+        subdirs = next(os.walk(path))[1]  # get only the first level subdirs
+    except StopIteration:
+        raise Exception(f"No path {path}")
+    else:
+        for d in subdirs:
+            f = os.path.join(path, d, fileName)
+            if os.path.isfile(f):
+                yield f
 
 
 def find_plugins(wpPath: str) -> Iterable[Tuple[str, str]]:
