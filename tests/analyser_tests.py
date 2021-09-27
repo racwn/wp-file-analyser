@@ -84,7 +84,7 @@ def test_download_file(mock_requests, mock_open_file, mock_isfile):
 	mock_isfile.return_value = True
 	res = wpa.download_file("http://file.com", ".", "alreadyafile.txt")
 	assert_false(mock_requests.get.called, "Failed to not start download")
-	assert_false(res)
+	assert_true(res)
 
 	mock_isfile.return_value = False
 	mock_open_file.return_value = False
@@ -225,7 +225,7 @@ def test_get_zipped_asset(mock_remove, mock_unzip, mock_download_file):
 					wpa.TEMP_DIR,
 					'thing.1.2.3.zip')
 	mock_unzip.assert_called_with(os.path.join(wpa.TEMP_DIR, 'thing.1.2.3.zip'), 'wp')
-	mock_remove.assert_called_with(os.path.join(wpa.TEMP_DIR, 'thing.1.2.3.zip'))
+	mock_remove.assert_not_called()
 	assert_equal(res, 'wp')	
 
 

@@ -91,8 +91,8 @@ def download_file(fileUrl: str, newFilePath: str, newFileName: str) -> bool:
     """Download a file via HTTP. If verbose is true, show a progress bar"""
     newFile = os.path.join(newFilePath, newFileName)
     if os.path.isfile(newFile):
-        msg("ERROR: cannot download %s, file already exists" % newFile, True)
-        return False
+        msg("INFO: File `%s` already exists, it will be used." % newFile)
+        return True
     response = requests.get(fileUrl, stream=True)
     try:
         response.raise_for_status()
@@ -222,7 +222,6 @@ def get_zipped_asset(zipUrl: str, zipName: str, toPath: str) -> str|Literal[Fals
         return False
     zipFilePath = os.path.join(TEMP_DIR, zipName)
     extractPath = unzip(zipFilePath, toPath)
-    os.remove(zipFilePath)
     return extractPath
 
 
