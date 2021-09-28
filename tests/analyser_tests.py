@@ -400,7 +400,7 @@ def test_process_wp_dirs(mock_unzip, mock_download_wp, mock_find_wp,
 					mock_makedirs, mock_pathexists, mock_is_wordpress):
 	args = mock.MagicMock()
 	args.wordpress_path = 'wp'
-	args.other_wordpress_path = False
+	args.other_wordpress_path = None
 	args.with_version = False
 
 	mock_is_wordpress.side_effect = [False]
@@ -422,7 +422,7 @@ def test_process_wp_dirs(mock_unzip, mock_download_wp, mock_find_wp,
 	mock_is_wordpress.return_value = True
 	mock_is_wordpress.side_effect = None
 
-	args.other_wordpress_path = False
+	args.other_wordpress_path = None
 	mock_pathexists.return_value = False
 	mock_makedirs.side_effect = OSError
 	wpPath, otherWpPath = wpa.process_wp_dirs(args)
