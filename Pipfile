@@ -9,6 +9,7 @@ requests = "*"
 [dev-packages]
 mypy = "*"
 nose = "*"
+pyfakefs = "*"
 types-requests = "*"
 
 [requires]

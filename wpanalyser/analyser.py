@@ -8,6 +8,7 @@ import shutil
 import sys
 import zipfile
 from filecmp import dircmp
+from pathlib import Path
 from typing import Any, Literal, Optional, Tuple, Iterable, IO, TextIO, BinaryIO, overload
 
 import requests
@@ -164,24 +165,6 @@ def search_file_for_string(searchFile: str, string: str) -> str|Literal[False]:
         return False
 
 
-def find_plugin_details(readmePath: str) -> Tuple[str, str|Literal[False]]:
-    """Search file for 'Stable tag: ' and copy return the version number
-    after it. Extract the plugin name from the file path.
-    """
-    version: str|Literal[False]
-    versionLine = search_file_for_string(readmePath, "Stable tag:")
-    if versionLine:
-        cutStart = versionLine.find(':') + 2
-        version = versionLine[cutStart:-1]
-    else:
-        version = False
-    nameCutStart =  readmePath.find('plugins')
-    nameCutStart = nameCutStart + 8
-    nameCutEnd = readmePath.find(os.path.sep, nameCutStart)
-    name = readmePath[nameCutStart:nameCutEnd]
-    return name, version
-
-
 def find_wp_version(versionFile: str) -> str|Literal[False]:
     """Search file for the string "$wp_version =" and return the version number 
     after it.
@@ -196,15 +179,6 @@ def find_wp_version(versionFile: str) -> str|Literal[False]:
             return False
         else:
             return line[cutStart:cutEnd]
-
-
-def find_theme_details(stylesheet: str) -> Tuple[str|Literal[False], str|Literal[False]]:
-    """Extract the theme name and version from theme stylesheet"""
-    nameLine = search_file_for_string(stylesheet, "Text Domain:")
-    name: str|Literal[False] = nameLine[nameLine.find(':') + 2:-1] if nameLine else False
-    versionLine = search_file_for_string(stylesheet, "Version:")
-    version: str|Literal[False] = versionLine[versionLine.find(':') + 2:-1] if versionLine else False
-    return name, version
 
 
 def download_wordpress(version: str, toDir: str) -> Tuple[bool, str]:
@@ -266,29 +240,70 @@ def get_file_from_each_subdirectory(path: str, fileName: str) -> Iterable[str]:
 
 def find_plugins(wpPath: str) -> Iterable[Tuple[str, str]]:
     """Return a list of plugins and their current versions"""
-    pluginsDir = os.path.join(wpPath, 'wp-content', 'plugins')
-    readmeFiles = get_file_from_each_subdirectory(pluginsDir, 'readme.txt')
-    for readme in readmeFiles:
-        name, version = find_plugin_details(readme)
-        if not version:
-            msg("ERROR: Could not find plugin version in %s" % readme)
-            continue
-        yield name, version
+    for pluginPath in Path(wpPath, "wp-content", "plugins").iterdir():
+        if pluginPath.name != "index.php":
+            name, version = find_plugin_details(pluginPath)
+            if (name is not None) and (version is not None):
+                yield name, version
+            else:
+                if name is None:
+                    msg(f"ERROR: Could not find plugin name in {pluginPath}", error=True)
+                if version is None:
+                    msg(f"ERROR: Could not find plugin version in {pluginPath}", error=True)
+
+
+def find_plugin_details(pluginPath: Path) -> Tuple[Optional[str], Optional[str]]:
+    """Search file for 'Stable tag: ' and copy return the version number
+    after it. Extract the plugin name from the file path.
+    """
+    variants = [
+        (f"readme.txt",                              "Stable tag:"),
+        (f"{pluginPath.name}.php",                   "Version:"),
+        (f"{pluginPath.name.replace('-', '_')}.php", "Version:"),
+    ]
+    for filename, key in variants:
+        filepath = pluginPath.joinpath(filename)
+        if filepath.exists():
+            version = search_file_for_key(filepath, key)
+            if version is not None:
+                return pluginPath.name, version
+    return pluginPath.name, None
 
 
 def find_themes(wpPath: str) -> Iterable[Tuple[str, str]]:
     """Return a list of themes and their versions"""
-    themesDir = os.path.join(wpPath, 'wp-content', 'themes')
-    themeStylesheets = get_file_from_each_subdirectory(themesDir, 'style.css')
-    for stylesheet in themeStylesheets:
-        name, version = find_theme_details(stylesheet)
-        if not name:
-            msg("ERROR: Could not find theme name in %s" % stylesheet)
-            continue
-        if not version:
-            msg("ERROR: Could not find theme version in %s" % stylesheet)
-            continue
-        yield name, version
+    for themePath in Path(wpPath, "wp-content", "themes").iterdir():
+        if themePath.name != "index.php":
+            name, version = find_theme_details(themePath)
+            if (name is not None) and (version is not None):
+                yield name, version
+            else:
+                if name is None:
+                    msg(f"ERROR: Could not find theme name in {themePath}", error=True)
+                if version is None:
+                    msg(f"ERROR: Could not find theme version in {themePath}", error=True)
+
+
+def find_theme_details(themePath: Path) -> Tuple[Optional[str], Optional[str]]:
+    """Extract the theme name and version from theme stylesheet"""
+    filepath = themePath.joinpath("style.css")
+    if filepath.exists():
+        name = search_file_for_key(filepath, "Text Domain:")
+        version = search_file_for_key(filepath, "Version:")
+        return name, version
+    else:
+        return None, None
+
+
+def search_file_for_key(filepath: Path, key: str) -> Optional[str]:
+    with filepath.open('r', encoding='UTF-8') as file:
+        for line in file.readlines():
+            pos = line.find(key)
+            if pos != -1:
+                value = line[pos + len(key) :].strip()
+                if value != "":
+                    return value
+    return None
 
 
 def analyze(dcres: dircmp[str], wpPath: str) -> Tuple[set[str], set[str], set[str]]:

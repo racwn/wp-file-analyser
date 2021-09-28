@@ -4,6 +4,8 @@ from io import StringIO, FileIO
 from pathlib import Path
 from unittest import mock
 
+from pyfakefs.fake_filesystem import FakeFilesystem  # type: ignore
+from pyfakefs.fake_filesystem_unittest import patchfs  # type: ignore
 from nose.tools import assert_true, assert_false, assert_equal  # type: ignore
 from requests.exceptions import HTTPError
 
@@ -163,11 +165,10 @@ def test_search_file_for_str(mock_open_file):
 	assert_false(line)
 
 
-@mock.patch('wpanalyser.analyser.search_file_for_string')
-def test_find_plugin_details(mock_search_file):
-	mock_search_file.return_value = "Stable tag: 1.2.3\n"
-	name, version = wpa.find_plugin_details('wp/wp-content/plugins/plugin1/readme.txt')
-	mock_search_file.assert_called_with('wp/wp-content/plugins/plugin1/readme.txt', "Stable tag:")
+@patchfs
+def test_find_plugin_details(fakefs: FakeFilesystem):
+	fakefs.create_file("wp/wp-content/plugins/plugin1/readme.txt").set_contents("Stable tag: 1.2.3")
+	name, version = wpa.find_plugin_details(Path("wp/wp-content/plugins/plugin1"))
 	assert_equal(name, 'plugin1')
 	assert_equal(version, '1.2.3')
 
@@ -190,14 +191,10 @@ def test_find_wp_version(mock_search_file):
 	assert_equal(res, '1.2.3')
 
 
-@mock.patch('wpanalyser.analyser.search_file_for_string')
-def test_find_theme_details(mock_search_file):
-	mock_search_file.side_effect = ['Text Domain: themename\n', 'Version: 1.2.3\n']
-	name, version = wpa.find_theme_details('stylesheet.css')
-	calls = [
-		mock.call('stylesheet.css', 'Text Domain:'), 
-		mock.call('stylesheet.css', 'Version:')]
-	mock_search_file.assert_has_calls(calls)
+@patchfs
+def test_find_theme_details(fakefs: FakeFilesystem):
+	fakefs.create_file("wp/wp-content/themes/theme1/style.css").set_contents("Text Domain: themename\nVersion: 1.2.3")
+	name, version = wpa.find_theme_details(Path("wp/wp-content/themes/theme1"))
 	assert_equal(name, 'themename')
 	assert_equal(version, '1.2.3')
 
@@ -288,35 +285,21 @@ def test_get_file_from_from_each_subdirectory(mock_isfile, mock_walk):
 		p('plugins/plugin2/readme.txt')
 	])
 
-@mock.patch('wpanalyser.analyser.find_plugin_details')
-@mock.patch('wpanalyser.analyser.get_file_from_each_subdirectory')
-def test_find_plugins(mock_get_file_from_each, mock_find_plugin_details):
-	mock_get_file_from_each.return_value = [p('wp/wp-content/plugins/plugin1/readme.txt'), p('wp/wp-content/plugins/plugin2/readme.txt')]
-	mock_find_plugin_details.side_effect = [['plugin1', '1.2.3'], ['plugin2', '1.0']]
+@patchfs
+def test_find_plugins(fakefs: FakeFilesystem):
+	fakefs.create_file("wp/wp-content/plugins/plugin1/readme.txt").set_contents("Stable tag: 1.2.3\n")
+	fakefs.create_file("wp/wp-content/plugins/plugin2/readme.txt").set_contents("Stable tag: 1.0\n")
 	found = list(wpa.find_plugins('wp'))
-	mock_get_file_from_each.assert_called_with(p('wp/wp-content/plugins'), 'readme.txt')
-	calls = [
-		mock.call(p('wp/wp-content/plugins/plugin1/readme.txt')),
-		mock.call(p('wp/wp-content/plugins/plugin2/readme.txt'))
-	]
-	mock_find_plugin_details.assert_has_calls(calls)
 	assert_equal(found, [
 		('plugin1', '1.2.3'),
 		('plugin2', '1.0'),
 	])
 
-@mock.patch('wpanalyser.analyser.find_theme_details')
-@mock.patch('wpanalyser.analyser.get_file_from_each_subdirectory')
-def test_find_themes(mock_get_file_from_each, mock_find_theme_details):
-	mock_get_file_from_each.return_value = [p('wp/wp-content/themes/theme1/stylesheet.css'), p('wp/wp-content/themes/theme2/stylesheet.css')]
-	mock_find_theme_details.side_effect = [['theme1', '1.2.3'], ['theme2', '1.0']]
+@patchfs
+def test_find_themes(fakefs: FakeFilesystem):
+	fakefs.create_file("wp/wp-content/themes/theme1/style.css").set_contents("Text Domain: theme1\nVersion: 1.2.3\n")
+	fakefs.create_file("wp/wp-content/themes/theme2/style.css").set_contents("Text Domain: theme2\nVersion: 1.0\n")
 	found = list(wpa.find_themes('wp'))
-	mock_get_file_from_each.assert_called_with(p('wp/wp-content/themes'), 'style.css')
-	calls = [
-		mock.call(p('wp/wp-content/themes/theme1/stylesheet.css')),
-		mock.call(p('wp/wp-content/themes/theme2/stylesheet.css'))
-	]
-	mock_find_theme_details.assert_has_calls(calls)
 	assert_equal(found, [
 		('theme1', '1.2.3'),
 		('theme2', '1.0'),
