@@ -1,21 +1,18 @@
 #!/usr/bin/env python
 
-import argparse
-import urllib
-import zipfile
-import os
-import sys
-import requests
-import shutil
-from requests.exceptions import HTTPError
-from filecmp import dircmp
+from __future__ import annotations
 
-global WP_VERSION_FILE_PATH
-global WP_PACKAGE_ARCHIVE_LINK
-global IGNORED_WP_DIRS
-global WP_FILES
-global TEMP_DIR
-global verbose
+import argparse
+import os
+import shutil
+import sys
+import zipfile
+from filecmp import dircmp
+from pathlib import Path
+from typing import Any, Literal, Optional, Tuple, Iterable, IO, TextIO, BinaryIO, overload
+
+import requests
+from requests.exceptions import HTTPError
 
 # File that contains the WordPress version number
 WP_VERSION_FILE_PATH = "wp-includes/version.php"
@@ -48,35 +45,40 @@ TEMP_DIR = 'wpa-temp'
 verbose = False
 
 
-def msg(msg, error=False):
+def msg(message: str, error: bool = False) -> None:
     """Print a message according to verbosity and error conditions."""
     if error or verbose:
-        print msg
+        print(message)
 
 
-def open_file(fileName, mode):
+@overload
+def open_file(fileName: str, mode: Literal['r', 'w'], encoding: Optional[str] = None) -> TextIO|Literal[False]: ...
+@overload
+def open_file(fileName: str, mode: Literal['rb', 'wb'], encoding: None = None) -> BinaryIO|Literal[False]: ...
+def open_file(fileName: str, mode: str, encoding: Optional[str] = None) -> IO[Any]|Literal[False]:
     """Open file with mode. Return False on failure."""
     try:
-        f = open(fileName, mode)
-        return f
+        return open(fileName, mode, encoding=encoding)
     except IOError as e:
         msg("Error opening [%s]: %s" % (fileName, e.strerror), True)
         return False
 
 
-def unzip(zippedFile, outPath):
+def unzip(zippedFile: str, outPath: str) -> str | Literal[False]:
     """Extract all files from a zip archive to a destination directory."""
-    newDir = False  # the toplevel directory name in the zipfile
     fh = open_file(zippedFile, 'rb')
+    if not fh:
+        return False
     with fh:
         try:
             z = zipfile.ZipFile(fh)
             namelist = z.namelist()
-            newDir = namelist[0]
+            newDir = namelist[0]  # the toplevel directory name in the zipfile
             for name in namelist:
                 z.extract(name, outPath)
+            return newDir
         except RuntimeError as re:
-            msg("Error processing zip (RuntimeError): %s" % (re), True)
+            msg("Error processing zip (RuntimeError): %s" % re, True)
             return False
         except IOError as ioe:
             msg("Error opening [%s]: %s" % (zippedFile, ioe.strerror), True)
@@ -84,35 +86,32 @@ def unzip(zippedFile, outPath):
         except zipfile.BadZipfile as bzf:
             msg("Bad zip file: %s" % zippedFile, True)
             return False
-    return newDir
 
 
-def download_file(fileUrl, newFilePath, newFileName):
+def download_file(fileUrl: str, newFilePath: str, newFileName: str) -> bool:
     """Download a file via HTTP. If verbose is true, show a progress bar"""
     newFile = os.path.join(newFilePath, newFileName)
     if os.path.isfile(newFile):
-        msg("ERROR: cannot download %s, file already exists" % newFile, True)
-        return False
+        msg("INFO: File `%s` already exists, it will be used." % newFile)
+        return True
+    response = requests.get(fileUrl, stream=True)
     try:
-        response = requests.get(fileUrl, stream=True)
         response.raise_for_status()
     except HTTPError:
-        msg("ERROR: download problem[%s]: %s " % (
-                                                response.status_code,
-                                                fileUrl), True)
+        msg("ERROR: download problem[%s]: %s " % (response.status_code, fileUrl), True)
         return False
     else:
         f = open_file(newFile, "wb")
         if not f:
-            msg("ERROR: cannot create new file %s" % (newFile), True)
+            msg("ERROR: cannot create new file %s" % newFile, True)
             return False
         with f:
-            contentLength = response.headers.get('content-length')
-            if (contentLength is None) or (verbose is False):
+            contentLengthHeader = response.headers.get('content-length')
+            if (contentLengthHeader is None) or (verbose is False):
                 f.write(response.content)
             else:
                 dl = 0
-                contentLength = int(contentLength)
+                contentLength = int(contentLengthHeader)
                 sys.stdout.write("\r%s [%s]" % (newFileName, ' ' * 50))
                 for data in response.iter_content(chunk_size=1024):
                     if data:
@@ -124,11 +123,11 @@ def download_file(fileUrl, newFilePath, newFileName):
                                                          newFileName,
                                                          '=' * done,
                                                          ' ' * (50-done)))
-                print ''  # newline after progress bar
+                print()  # newline after progress bar
         return True
 
 
-def search_dir_for_exts(searchDir, exts):
+def search_dir_for_exts(searchDir: str, exts: Tuple[str, ...]) -> set[str]:
     """Search directory and its sub-directories for files with extensions."""
     foundFiles = set()
     for root, dirs, files in os.walk(searchDir):
@@ -138,14 +137,14 @@ def search_dir_for_exts(searchDir, exts):
     return foundFiles
 
 
-def is_subdir(child, parent):
+def is_subdir(child: str, parent: str) -> bool:
     """Return True if child is a sub-directory of parent directory."""
     absPath = os.path.abspath(child)
     absDir = os.path.abspath(parent)
     return absPath.startswith(absDir + os.path.sep)
 
 
-def ignored_file(f, wpPath):
+def ignored_file(f: str, wpPath: str) -> bool:
     """Returns True if a file should be ignored."""
     for s in IGNORED_WP_DIRS:
         if s in f:  # test if partial path string in IGNORED_WP_DIRS
@@ -154,9 +153,9 @@ def ignored_file(f, wpPath):
     return False
 
 
-def search_file_for_string(searchFile, string):
+def search_file_for_string(searchFile: str, string: str) -> str|Literal[False]:
     """Search file for the first line that contains string and return it"""
-    f = open_file(searchFile, 'r')
+    f = open_file(searchFile, 'r', encoding='UTF-8')
     if not f:
         return False
     with f:
@@ -166,24 +165,7 @@ def search_file_for_string(searchFile, string):
         return False
 
 
-def find_plugin_details(readmePath):
-    """Search file for 'Stable tag: ' and copy return the version number
-    after it. Extract the plugin name from the file path.
-    """
-    name = False
-    version = False 
-    versionLine = search_file_for_string(readmePath, "Stable tag:")
-    if versionLine:
-        cutStart = versionLine.find(':') + 2
-        version = versionLine[cutStart:-1]
-    nameCutStart =  readmePath.find('plugins')
-    nameCutStart = nameCutStart + 8
-    nameCutEnd = readmePath.find(os.path.sep, nameCutStart)
-    name = readmePath[nameCutStart:nameCutEnd]
-    return name, version
-
-
-def find_wp_version(versionFile):
+def find_wp_version(versionFile: str) -> str|Literal[False]:
     """Search file for the string "$wp_version =" and return the version number 
     after it.
     """
@@ -193,45 +175,31 @@ def find_wp_version(versionFile):
     else:
         cutStart = line.find("'") + 1
         cutEnd = line.find("'", cutStart + 1)
-        if((cutStart <= 0) or (cutEnd <= cutStart)):
+        if (cutStart <= 0) or (cutEnd <= cutStart):
             return False
         else:
             return line[cutStart:cutEnd]
 
 
-def find_theme_details(stylesheet):
-    """Extract the theme name and version from theme stylesheet"""
-    name = False
-    version = False
-    nameLine = search_file_for_string(stylesheet, "Text Domain:")
-    if nameLine:
-        name = nameLine[nameLine.find(':') + 2:-1]
-    versionLine = search_file_for_string(stylesheet, "Version:")
-    if versionLine:
-        version = versionLine[versionLine.find(':') + 2:-1]
-    return name, version
-
-
-def download_wordpress(version, toDir):
+def download_wordpress(version: str, toDir: str) -> Tuple[bool, str]:
     """Download the identified WordPress archive version into toDir."""
-    newFileName = "wordpress_%s.zip" % (version)
+    newFileName = "wordpress_%s.zip" % version
     fileUrl = "%s%s.zip" % (WP_PACKAGE_ARCHIVE_LINK, version)
     res = download_file(fileUrl, toDir, newFileName)
     newFilePath = os.path.join(toDir, newFileName)
     return res, newFilePath
 
-def get_zipped_asset(zipUrl, zipName, toPath):
+def get_zipped_asset(zipUrl: str, zipName: str, toPath: str) -> str|Literal[False]:
     """Download zip file as zipName from URL and extract it toPath"""
     res = download_file(zipUrl, TEMP_DIR, zipName)
     if not res:
         return False
     zipFilePath = os.path.join(TEMP_DIR, zipName)
     extractPath = unzip(zipFilePath, toPath)
-    os.remove(zipFilePath)
     return extractPath
 
 
-def get_plugin(name, version, wpDir):
+def get_plugin(name: str, version: str, wpDir: str) -> str | Literal[False]:
     """Get a new copy of given plugin version, extract it to the plugins directory of wpDir"""
     zipName = "%s.%s.zip" % (name, version)
     zipUrl = "%s%s" % (WP_PLUGIN_ARCHIVE_LINK, zipName)
@@ -240,7 +208,7 @@ def get_plugin(name, version, wpDir):
     return extractPath
 
 
-def get_theme(name, version, wpDir):
+def get_theme(name: str, version: str, wpDir: str) -> str | Literal[False]:
     """Get a new copy of given theme version, extract it to the themes directory of wpDir"""
     zipName = "%s.%s.zip" % (name, version)
     zipUrl = "%s%s" % (WP_THEME_ARCHIVE_LINK, zipName)
@@ -249,49 +217,96 @@ def get_theme(name, version, wpDir):
     return extractPath
 
 
-def is_wordpress(dirPath):
+def is_wordpress(dirPath: str) -> bool:
     """Return True if dirPath contains all the files in WP_COMMON_FILES."""
-    noMissingFiles = True
     for wpFile in WP_COMMON_FILES:
         if not os.path.isfile(os.path.join(dirPath, wpFile)):
-            noMissingFiles = False
-    return noMissingFiles
+            return False
+    return True
 
 
-def get_file_from_each_subdirectory(path, fileName):
+def get_file_from_each_subdirectory(path: str, fileName: str) -> Iterable[str]:
     """For each subdirectory of path, return a path of fileName if found"""
-    found = []
-    subdirs = next(os.walk(path))[1]  # get only the first level subdirs
-    for d in subdirs:
-        f = os.path.join(path, d, fileName)
-        if os.path.isfile(f):
-            found.append(f)
-    return found
+    try:
+        subdirs = next(os.walk(path))[1]  # get only the first level subdirs
+    except StopIteration:
+        raise Exception(f"No path {path}")
+    else:
+        for d in subdirs:
+            f = os.path.join(path, d, fileName)
+            if os.path.isfile(f):
+                yield f
 
 
-def find_plugins(wpPath):
+def find_plugins(wpPath: str) -> Iterable[Tuple[str, str]]:
     """Return a list of plugins and their current versions"""
-    found = []
-    pluginsDir = os.path.join(wpPath, 'wp-content', 'plugins')
-    readmeFiles = get_file_from_each_subdirectory(pluginsDir, 'readme.txt')
-    for readme in readmeFiles:
-        name, version = find_plugin_details(readme)
-        found.append({'name': name, 'version': version})
-    return found
+    for pluginPath in Path(wpPath, "wp-content", "plugins").iterdir():
+        if pluginPath.name != "index.php":
+            name, version = find_plugin_details(pluginPath)
+            if (name is not None) and (version is not None):
+                yield name, version
+            else:
+                if name is None:
+                    msg(f"ERROR: Could not find plugin name in {pluginPath}", error=True)
+                if version is None:
+                    msg(f"ERROR: Could not find plugin version in {pluginPath}", error=True)
 
 
-def find_themes(wpPath):
+def find_plugin_details(pluginPath: Path) -> Tuple[Optional[str], Optional[str]]:
+    """Search file for 'Stable tag: ' and copy return the version number
+    after it. Extract the plugin name from the file path.
+    """
+    variants = [
+        (f"readme.txt",                              "Stable tag:"),
+        (f"{pluginPath.name}.php",                   "Version:"),
+        (f"{pluginPath.name.replace('-', '_')}.php", "Version:"),
+    ]
+    for filename, key in variants:
+        filepath = pluginPath.joinpath(filename)
+        if filepath.exists():
+            version = search_file_for_key(filepath, key)
+            if version is not None:
+                return pluginPath.name, version
+    return pluginPath.name, None
+
+
+def find_themes(wpPath: str) -> Iterable[Tuple[str, str]]:
     """Return a list of themes and their versions"""
-    found = []
-    themesDir = os.path.join(wpPath, 'wp-content', 'themes')
-    themeStylesheets = get_file_from_each_subdirectory(themesDir, 'style.css')
-    for stylesheet in themeStylesheets:
-        name, version = find_theme_details(stylesheet)
-        found.append({'name': name, 'version': version})
-    return found
+    for themePath in Path(wpPath, "wp-content", "themes").iterdir():
+        if themePath.name != "index.php":
+            name, version = find_theme_details(themePath)
+            if (name is not None) and (version is not None):
+                yield name, version
+            else:
+                if name is None:
+                    msg(f"ERROR: Could not find theme name in {themePath}", error=True)
+                if version is None:
+                    msg(f"ERROR: Could not find theme version in {themePath}", error=True)
 
 
-def analyze(dcres, wpPath):
+def find_theme_details(themePath: Path) -> Tuple[Optional[str], Optional[str]]:
+    """Extract the theme name and version from theme stylesheet"""
+    filepath = themePath.joinpath("style.css")
+    if filepath.exists():
+        name = search_file_for_key(filepath, "Text Domain:")
+        version = search_file_for_key(filepath, "Version:")
+        return name, version
+    else:
+        return None, None
+
+
+def search_file_for_key(filepath: Path, key: str) -> Optional[str]:
+    with filepath.open('r', encoding='UTF-8') as file:
+        for line in file.readlines():
+            pos = line.find(key)
+            if pos != -1:
+                value = line[pos + len(key) :].strip()
+                if value != "":
+                    return value
+    return None
+
+
+def analyze(dcres: dircmp[str], wpPath: str) -> Tuple[set[str], set[str], set[str]]:
     """Get extra, changed and missing files from a dircmp results object.
 
     From dircmp results find:
@@ -312,7 +327,8 @@ def analyze(dcres, wpPath):
     missing = set()
 
     # 1. Get modified files
-    [diff.add(os.path.join(dcres.left, f)) for f in dcres.diff_files]
+    for f in dcres.diff_files:
+        diff.add(os.path.join(dcres.left, f))
 
     # 2. Get extra files
     for name in dcres.left_only:
@@ -322,7 +338,8 @@ def analyze(dcres, wpPath):
                 extra.add(path)
 
     # 3. Get missing files
-    [missing.add(os.path.join(dcres.right, f)) for f in dcres.right_only]
+    for f in dcres.right_only:
+        missing.add(os.path.join(dcres.right, f))
 
     # Recurse into each sub dir
     for sub_dcres in dcres.subdirs.values():
@@ -334,26 +351,26 @@ def analyze(dcres, wpPath):
     return diff, extra, missing
 
 
-def print_analysis(diff, extra, missing, extraPHP):
+def print_analysis(diff: set[str], extra: set[str], missing: set[str], extraPHP: set[str]) -> None:
     """Show file lists in an easy to copy format"""
-    print "DIFF: (%s)" % len(diff)
-    for f in diff:
-        print f
+    print("DIFF: (%s)" % len(diff))
+    for f in sorted(diff):
+        print(f)
 
-    print "EXTRA: (%s)" % len(extra)
-    for f in extra:
-        print f
+    print("EXTRA: (%s)" % len(extra))
+    for f in sorted(extra):
+        print(f)
 
-    print "MISSING: (%s)" % len(missing)
-    for f in missing:
-        print f
+    print("MISSING: (%s)" % len(missing))
+    for f in sorted(missing):
+        print(f)
 
-    print "PHP FILES IN 'WP-CONTENT/UPLOADS': (%s)" % (len(extraPHP))
-    for f in extraPHP:
-        print f
+    print("PHP FILES IN 'WP-CONTENT/UPLOADS': (%s)" % len(extraPHP))
+    for f in sorted(extraPHP):
+        print(f)
 
 
-def create_args():
+def create_args() -> argparse.ArgumentParser:
     """Setup and return argparse object with required settings."""
 
     parser = argparse.ArgumentParser(description="""Find modified, missing
@@ -384,23 +401,24 @@ def create_args():
     return parser
 
 
-def process_wp_dirs(args):
+def process_wp_dirs(args: argparse.Namespace) -> Tuple[str|Literal[False], str|Literal[False]]:
     """Return paths to each WP directory, creating a new one where required."""
 
-    wpPath = args.wordpress_path
-    otherWpPath = False
+    wpPath: str = args.wordpress_path
+    otherWpPath: str|Literal[False] = False
 
     isWordpress = is_wordpress(wpPath)
     if not isWordpress:
-        print "ERROR: Could not find WordPress in %s" % (wpPath)
+        print("ERROR: Could not find WordPress in %s" % wpPath)
         return False, False
 
     # If given a second directory check it contains a copy of WordPress
-    if args.other_wordpress_path:
-        otherWpPath = args.other_wordpress_path
-        if not is_wordpress(otherWpPath):
-            print "ERROR: Could not find Wordpress in %s" % (otherWpPath)
-            otherWpPath = False
+    other_wordpress_path: Optional[str] = args.other_wordpress_path
+    if other_wordpress_path is not None:
+        if is_wordpress(other_wordpress_path):
+            otherWpPath = other_wordpress_path
+        else:
+            print("ERROR: Could not find Wordpress in %s" % otherWpPath)
 
     # Or download a new copy.
     else:
@@ -418,7 +436,7 @@ def process_wp_dirs(args):
             verF = os.path.join(wpPath, WP_VERSION_FILE_PATH)
             version = find_wp_version(verF)
             if not version:
-                msg("ERROR: Could not detect version in %s" % (verF), True)
+                msg("ERROR: Could not detect version in %s" % verF, True)
                 return wpPath, False
 
         res, zipFilePath = download_wordpress(version, TEMP_DIR)
@@ -434,7 +452,7 @@ def process_wp_dirs(args):
     return wpPath, otherWpPath
 
 
-def main():
+def main() -> None:
 
     parser = create_args()
     args = parser.parse_args()
@@ -463,19 +481,13 @@ def main():
     # been created.
     if not args.other_wordpress_path:
         msg('Getting plugins:')
-        plugins = find_plugins(wpPath)
-        for plugin in plugins:
-            name = plugin['name']
-            version = plugin['version']
+        for name, version in find_plugins(wpPath):
             res = get_plugin(name, version, otherWpPath)
             if not res:
                 msg("ERROR: Could not download %s %s" % (name, version), True)
 
         msg('Getting themes:')
-        themes = find_themes(wpPath)
-        for theme in themes:
-            name = theme['name']
-            version = theme['version']
+        for name, version in find_themes(wpPath):
             res = get_theme(name, version, otherWpPath)
             if not res:
                 msg("ERROR: Could not download %s %s" % (name, version), True)

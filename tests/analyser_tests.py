@@ -1,10 +1,19 @@
-from nose.tools import *
-import wpanalyser.analyser as wpa
-import mock
-import unittest
 import os
+import zipfile
+from io import StringIO, FileIO
+from pathlib import Path
+from unittest import mock
+
+from pyfakefs.fake_filesystem import FakeFilesystem  # type: ignore
+from pyfakefs.fake_filesystem_unittest import patchfs  # type: ignore
+from nose.tools import assert_true, assert_false, assert_equal  # type: ignore
 from requests.exceptions import HTTPError
-from StringIO import StringIO
+
+import wpanalyser.analyser as wpa
+
+
+def p(path_str: str) -> str:
+	return str(Path(path_str))
 
 
 """
@@ -14,12 +23,12 @@ def test_file_open():
 	m = mock.mock_open()
 	with mock.patch('wpanalyser.analyser.open', m, create=True):
 		wpa.open_file('foo', 'r')
-		m.assert_called_with('foo', 'r')
+		m.assert_called_with('foo', 'r', encoding=None)
 
 	m.side_effect = IOError
 	with mock.patch('wpanalyser.analyser.open', m, create=True):
 		res = wpa.open_file('foo', 'r')
-		m.assert_called_with('foo', 'r')
+		m.assert_called_with('foo', 'r', encoding=None)
 		assert_false(res)
 
 
@@ -48,7 +57,7 @@ def test_unzip(mock_open_file, mock_zip):
 	res = wpa.unzip('zipFile.zip', '/')
 	assert_false(res)
 
-	mock_zip.side_effect = wpa.zipfile.BadZipfile
+	mock_zip.side_effect = zipfile.BadZipfile
 	res = wpa.unzip('zipFile.zip', '/')
 	assert_false(res)
 
@@ -57,7 +66,7 @@ def test_unzip(mock_open_file, mock_zip):
 @mock.patch('wpanalyser.analyser.open_file')
 @mock.patch('wpanalyser.analyser.requests')
 def test_download_file(mock_requests, mock_open_file, mock_isfile):
-	mockFile = mock.MagicMock(spec=file)
+	mockFile = mock.MagicMock(spec=FileIO)
 	mock_open_file.return_value = mockFile
 	mock_isfile.return_value = False
 	response = mock.MagicMock()
@@ -83,7 +92,7 @@ def test_download_file(mock_requests, mock_open_file, mock_isfile):
 	mock_isfile.return_value = True
 	res = wpa.download_file("http://file.com", ".", "alreadyafile.txt")
 	assert_false(mock_requests.get.called, "Failed to not start download")
-	assert_false(res)
+	assert_true(res)
 
 	mock_isfile.return_value = False
 	mock_open_file.return_value = False
@@ -99,29 +108,29 @@ def test_download_file(mock_requests, mock_open_file, mock_isfile):
 @mock.patch('wpanalyser.analyser.os.walk')
 def test_search_dir_for_exts(mock_walk):
 	mock_walk.return_value = []
-	res = wpa.search_dir_for_exts('not a dir', ('.txt'))
+	res = wpa.search_dir_for_exts('not a dir', ('.txt',))
 	mock_walk.assert_called_with('not a dir')
-	resCmp = set()
+	resCmp: set[str] = set()
 	assert_equal(res, resCmp)
 	
 	mock_walk.return_value = [
-		('/foo', ('/bar',), ('test.txt', 'temp.doc', 'abc.pdf', 'file.docx')),
-		('/foo/bar', (), ('test2.txt', 'abc.pdf')),
+		(p('/foo'), ('bar',), ('test.txt', 'temp.doc', 'abc.pdf', 'file.docx')),
+		(p('/foo/bar'), (), ('test2.txt', 'abc.pdf')),
 	]
 	res = wpa.search_dir_for_exts('/foo', ('.txt', '.pdf'))
-	s = {'/foo/test.txt', '/foo/abc.pdf', '/foo/bar/test2.txt', '/foo/bar/abc.pdf'}
+	s = {p('/foo/test.txt'), p('/foo/abc.pdf'), p('/foo/bar/test2.txt'), p('/foo/bar/abc.pdf')}
 	assert_equal(len(res), 4, "Returned set is the wrong size")
 	assert_equal(res, s, "Wrong files are returned")
 
 
 @mock.patch('wpanalyser.analyser.os.path.abspath')
 def test_is_subdir(mock_abspath):
-	mock_abspath.side_effect = ['/abs/path/sub/file.txt', '/abs/path']
-	res = wpa.is_subdir('path/sub/file.txt', 'path')
+	mock_abspath.side_effect = [p('/abs/path/sub/file.txt'), p('/abs/path')]
+	res = wpa.is_subdir(p('path/sub/file.txt'), p('path'))
 	assert_true(res)
 
-	mock_abspath.side_effect = ['/abs/path/sub/file.txt', 'abs/not/same/path']
-	res = wpa.is_subdir('path/sub/file.txt', 'not/same/path')
+	mock_abspath.side_effect = [p('/abs/path/sub/file.txt'), p('abs/not/same/path')]
+	res = wpa.is_subdir(p('path/sub/file.txt'), p('not/same/path'))
 	assert_false(res)
 
 
@@ -144,23 +153,22 @@ def test_search_file_for_str(mock_open_file):
 	line = wpa.search_file_for_string('notafile.txt', 'ab')
 	assert_false(line)
 
-	mockFile = mock.MagicMock(spec=file)
+	mockFile = mock.MagicMock(spec=FileIO)
 	mock_open_file.return_value = mockFile
 	mockFile.__iter__ = mock.MagicMock(return_value=iter(['abc\n', 'def\n', 'ghi\n']))	
 	line = wpa.search_file_for_string('file.txt', 'ab')
-	mock_open_file.assert_called_with('file.txt', 'r')
+	mock_open_file.assert_called_with('file.txt', 'r', encoding='UTF-8')
 	assert_equal(line, 'abc\n')
 
 	line = wpa.search_file_for_string('file.txt', 'xyz')
-	mock_open_file.assert_called_with('file.txt', 'r')
+	mock_open_file.assert_called_with('file.txt', 'r', encoding='UTF-8')
 	assert_false(line)
 
 
-@mock.patch('wpanalyser.analyser.search_file_for_string')
-def test_find_plugin_details(mock_search_file):
-	mock_search_file.return_value = "Stable tag: 1.2.3\n"
-	name, version = wpa.find_plugin_details('wp/wp-content/plugins/plugin1/readme.txt')
-	mock_search_file.assert_called_with('wp/wp-content/plugins/plugin1/readme.txt', "Stable tag:")
+@patchfs
+def test_find_plugin_details(fakefs: FakeFilesystem):
+	fakefs.create_file("wp/wp-content/plugins/plugin1/readme.txt").set_contents("Stable tag: 1.2.3")
+	name, version = wpa.find_plugin_details(Path("wp/wp-content/plugins/plugin1"))
 	assert_equal(name, 'plugin1')
 	assert_equal(version, '1.2.3')
 
@@ -183,14 +191,10 @@ def test_find_wp_version(mock_search_file):
 	assert_equal(res, '1.2.3')
 
 
-@mock.patch('wpanalyser.analyser.search_file_for_string')
-def test_find_theme_details(mock_search_file):
-	mock_search_file.side_effect = ['Text Domain: themename\n', 'Version: 1.2.3\n']
-	name, version = wpa.find_theme_details('stylesheet.css')
-	calls = [
-		mock.call('stylesheet.css', 'Text Domain:'), 
-		mock.call('stylesheet.css', 'Version:')]
-	mock_search_file.assert_has_calls(calls)
+@patchfs
+def test_find_theme_details(fakefs: FakeFilesystem):
+	fakefs.create_file("wp/wp-content/themes/theme1/style.css").set_contents("Text Domain: themename\nVersion: 1.2.3")
+	name, version = wpa.find_theme_details(Path("wp/wp-content/themes/theme1"))
 	assert_equal(name, 'themename')
 	assert_equal(version, '1.2.3')
 
@@ -198,11 +202,11 @@ def test_find_theme_details(mock_search_file):
 @mock.patch('wpanalyser.analyser.download_file')
 def test_download_wordpress(mock_download_file):
 	mock_download_file.return_value = True
-	res, fileName = wpa.download_wordpress('1.4.3', 'tmp')
+	res, fileName = wpa.download_wordpress('1.4.3', p('tmp'))
 	mock_download_file.assert_called_with(wpa.WP_PACKAGE_ARCHIVE_LINK + '1.4.3.zip', 
-										  'tmp', 'wordpress_1.4.3.zip')
+										  p('tmp'), 'wordpress_1.4.3.zip')
 	assert_true(res)
-	assert_equal(fileName, 'tmp/wordpress_1.4.3.zip')
+	assert_equal(fileName, p('tmp/wordpress_1.4.3.zip'))
 
 @mock.patch('wpanalyser.analyser.download_file')
 @mock.patch('wpanalyser.analyser.unzip')
@@ -224,7 +228,7 @@ def test_get_zipped_asset(mock_remove, mock_unzip, mock_download_file):
 					wpa.TEMP_DIR,
 					'thing.1.2.3.zip')
 	mock_unzip.assert_called_with(os.path.join(wpa.TEMP_DIR, 'thing.1.2.3.zip'), 'wp')
-	mock_remove.assert_called_with(os.path.join(wpa.TEMP_DIR, 'thing.1.2.3.zip'))
+	mock_remove.assert_not_called()
 	assert_equal(res, 'wp')	
 
 
@@ -263,56 +267,42 @@ def test_is_wordpress(mock_isfile):
 @mock.patch('wpanalyser.analyser.os.path.isfile')
 def test_get_file_from_from_each_subdirectory(mock_isfile, mock_walk):
 	mock_walk.return_value = iter([
-			('plugins', ('plugin1', 'plugin2', 'plugin3'), ('readme.txt', 'readme.txt', 'file.txt')),
-			('plugins/plugin1', (), ('readme.txt')),
-			('plugins/plugin2', (), ('readme.txt')),
-			('plugins/plugin3', (), ('file.txt'))
+			(p('plugins'), ('plugin1', 'plugin2', 'plugin3'), ('readme.txt', 'readme.txt', 'file.txt')),
+			(p('plugins/plugin1'), (), ('readme.txt',)),
+			(p('plugins/plugin2'), (), ('readme.txt',)),
+			(p('plugins/plugin3'), (), ('file.txt',))
 		])
 	mock_isfile.side_effect = [True, True, False]
-	found = wpa.get_file_from_each_subdirectory('plugins', 'readme.txt')
+	found = list(wpa.get_file_from_each_subdirectory('plugins', 'readme.txt'))
 	calls = [
-		mock.call('plugins/plugin1/readme.txt'),
-		mock.call('plugins/plugin2/readme.txt'),
-		mock.call('plugins/plugin3/readme.txt')
+		mock.call(p('plugins/plugin1/readme.txt')),
+		mock.call(p('plugins/plugin2/readme.txt')),
+		mock.call(p('plugins/plugin3/readme.txt'))
 	]
 	mock_isfile.assert_has_calls(calls)
 	assert_equal(found, [
-		'plugins/plugin1/readme.txt',
-		'plugins/plugin2/readme.txt'
+		p('plugins/plugin1/readme.txt'),
+		p('plugins/plugin2/readme.txt')
 	])
 
-@mock.patch('wpanalyser.analyser.find_plugin_details')
-@mock.patch('wpanalyser.analyser.get_file_from_each_subdirectory')
-def test_find_plugins(mock_get_file_from_each, mock_find_plugin_details):
-	mock_get_file_from_each.return_value = ['wp/wp-content/plugins/plugin1/readme.txt', 'wp/wp-content/plugins/plugin2/readme.txt']
-	mock_find_plugin_details.side_effect = [['plugin1', '1.2.3'], ['plugin2', '1.0']]
-	found = wpa.find_plugins('wp/')
-	mock_get_file_from_each.assert_called_with('wp/wp-content/plugins', 'readme.txt')
-	calls = [
-		mock.call('wp/wp-content/plugins/plugin1/readme.txt'),
-		mock.call('wp/wp-content/plugins/plugin2/readme.txt')
-	]
-	mock_find_plugin_details.assert_has_calls(calls)
+@patchfs
+def test_find_plugins(fakefs: FakeFilesystem):
+	fakefs.create_file("wp/wp-content/plugins/plugin1/readme.txt").set_contents("Stable tag: 1.2.3\n")
+	fakefs.create_file("wp/wp-content/plugins/plugin2/readme.txt").set_contents("Stable tag: 1.0\n")
+	found = list(wpa.find_plugins('wp'))
 	assert_equal(found, [
-		{'name': 'plugin1', 'version': '1.2.3'},
-		{'name': 'plugin2', 'version': '1.0'}
+		('plugin1', '1.2.3'),
+		('plugin2', '1.0'),
 	])
 
-@mock.patch('wpanalyser.analyser.find_theme_details')
-@mock.patch('wpanalyser.analyser.get_file_from_each_subdirectory')
-def test_find_themes(mock_get_file_from_each, mock_find_theme_details):
-	mock_get_file_from_each.return_value = ['wp/wp-content/themes/theme1/stylesheet.css', 'wp/wp-content/themes/theme2/stylesheet.css']
-	mock_find_theme_details.side_effect = [['theme1', '1.2.3'], ['theme2', '1.0']]
-	found = wpa.find_themes('wp/')
-	mock_get_file_from_each.assert_called_with('wp/wp-content/themes', 'style.css')
-	calls = [
-		mock.call('wp/wp-content/themes/theme1/stylesheet.css'),
-		mock.call('wp/wp-content/themes/theme2/stylesheet.css')
-	]
-	mock_find_theme_details.assert_has_calls(calls)
+@patchfs
+def test_find_themes(fakefs: FakeFilesystem):
+	fakefs.create_file("wp/wp-content/themes/theme1/style.css").set_contents("Text Domain: theme1\nVersion: 1.2.3\n")
+	fakefs.create_file("wp/wp-content/themes/theme2/style.css").set_contents("Text Domain: theme2\nVersion: 1.0\n")
+	found = list(wpa.find_themes('wp'))
 	assert_equal(found, [
-		{'name': 'theme1', 'version': '1.2.3'},
-		{'name': 'theme2', 'version': '1.0'}
+		('theme1', '1.2.3'),
+		('theme2', '1.0'),
 	])
 
 
@@ -321,22 +311,22 @@ def test_find_themes(mock_get_file_from_each, mock_find_theme_details):
 def test_analyze(mock_isdir, mock_ignored_file):
 	mock_isdir.return_value = False
 	firstDcRes = mock.MagicMock()
-	firstDcRes.left = 'some/path'
-	firstDcRes.right = 'other/path'
+	firstDcRes.left = p('some/path')
+	firstDcRes.right = p('other/path')
 	firstDcRes.diff_files = ['changed1.txt', 'changed2.txt']
 	firstDcRes.left_only = ['extra1.txt', 'extra2.txt']
 	firstDcRes.right_only = ['missing1.txt']
 	secondDcRes = mock.MagicMock()
-	secondDcRes.left = 'some/path/sub'
+	secondDcRes.left = p('some/path/sub')
 	secondDcRes.diff_files = ['changed3.txt']
 	secondDcRes.left_only = ['extra3.txt']
 	firstDcRes.subdirs.values.return_value = [secondDcRes]
 	secondDcRes.subdirs.values.return_value = []
 	mock_ignored_file.side_effect = [False, False, True] # ignore files in the /sub directory
 	diff, extra, missing = wpa.analyze(firstDcRes, 'wp')
-	diffCmp =  {'some/path/changed1.txt', 'some/path/changed2.txt', 'some/path/sub/changed3.txt' }
-	extraCmp = {'some/path/extra1.txt', 'some/path/extra2.txt'}
-	missingCmp = {'other/path/missing1.txt'}
+	diffCmp =  {p('some/path/changed1.txt'), p('some/path/changed2.txt'), p('some/path/sub/changed3.txt')}
+	extraCmp = {p('some/path/extra1.txt'), p('some/path/extra2.txt')}
+	missingCmp = {p('other/path/missing1.txt')}
 	assert_equal(diff, diffCmp)
 	assert_equal(extra, extraCmp)
 	assert_equal(missing, missingCmp)
@@ -344,10 +334,10 @@ def test_analyze(mock_isdir, mock_ignored_file):
 
 @mock.patch('wpanalyser.analyser.sys.stdout', new_callable=StringIO)
 def test_print_analysis(mock_stdout):
-	diff = ['diff1.txt', 'diff2.txt']
-	extra = ['extra1.txt', 'extra2.txt']
-	missing = ['missing1.txt', 'missing2.txt']
-	extraPhp = ['extra1.php', 'extra2.php']
+	diff = {'diff1.txt', 'diff2.txt'}
+	extra = {'extra1.txt', 'extra2.txt'}
+	missing = {'missing1.txt', 'missing2.txt'}
+	extraPhp = {'extra1.php', 'extra2.php'}
 	wpa.print_analysis(diff,extra,missing,extraPhp)
 	text = mock_stdout.getvalue()
 	assert text == """DIFF: (2)
@@ -393,7 +383,7 @@ def test_process_wp_dirs(mock_unzip, mock_download_wp, mock_find_wp,
 					mock_makedirs, mock_pathexists, mock_is_wordpress):
 	args = mock.MagicMock()
 	args.wordpress_path = 'wp'
-	args.other_wordpress_path = False
+	args.other_wordpress_path = None
 	args.with_version = False
 
 	mock_is_wordpress.side_effect = [False]
@@ -415,7 +405,7 @@ def test_process_wp_dirs(mock_unzip, mock_download_wp, mock_find_wp,
 	mock_is_wordpress.return_value = True
 	mock_is_wordpress.side_effect = None
 
-	args.other_wordpress_path = False
+	args.other_wordpress_path = None
 	mock_pathexists.return_value = False
 	mock_makedirs.side_effect = OSError
 	wpPath, otherWpPath = wpa.process_wp_dirs(args)
@@ -424,9 +414,9 @@ def test_process_wp_dirs(mock_unzip, mock_download_wp, mock_find_wp,
 
 	mock_makedirs.side_effect = None
 
-	os.makedirs.side_effect = None
 	mock_find_wp.return_value = False
 	wpPath, otherWpPath = wpa.process_wp_dirs(args)
+	assert wpPath is not False
 	mock_find_wp.assert_called_with(os.path.join(wpPath, wpa.WP_VERSION_FILE_PATH))
 	assert_equal(wpPath, 'wp')
 	assert_false(otherWpPath)
@@ -446,5 +436,5 @@ def test_process_wp_dirs(mock_unzip, mock_download_wp, mock_find_wp,
 	mock_unzip.return_value = 'wp'
 	wpPath, otherWpPath = wpa.process_wp_dirs(args)
 	assert_equal(wpPath, 'wp')
-	assert_equal(otherWpPath, 'wpa-temp/wp')
+	assert_equal(otherWpPath, p('wpa-temp/wp'))
 
