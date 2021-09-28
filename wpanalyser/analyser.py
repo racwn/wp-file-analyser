@@ -339,19 +339,19 @@ def analyze(dcres: dircmp[str], wpPath: str) -> Tuple[set[str], set[str], set[st
 def print_analysis(diff: set[str], extra: set[str], missing: set[str], extraPHP: set[str]) -> None:
     """Show file lists in an easy to copy format"""
     print("DIFF: (%s)" % len(diff))
-    for f in diff:
+    for f in sorted(diff):
         print(f)
 
     print("EXTRA: (%s)" % len(extra))
-    for f in extra:
+    for f in sorted(extra):
         print(f)
 
     print("MISSING: (%s)" % len(missing))
-    for f in missing:
+    for f in sorted(missing):
         print(f)
 
     print("PHP FILES IN 'WP-CONTENT/UPLOADS': (%s)" % len(extraPHP))
-    for f in extraPHP:
+    for f in sorted(extraPHP):
         print(f)
 
 
